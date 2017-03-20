@@ -17,6 +17,7 @@ const DOOR_LOCKED = 1 << 7;
 
 const CLIMATE_ON = 1 << 0;
 const CLIMATE_PRECONDITIONING = 1 << 1;
+const CLIMATE_BATTERY_HEATER = 1 << 2;
 
 var g_BearerToken;
 var g_BearerTokenExpiresTime = Infinity;
@@ -158,6 +159,11 @@ function getData() {
 			}
 		}
 		
+		var climateFlags = flagify(results.climate, {"is_climate_on": CLIMATE_ON, "smart_preconditioning": CLIMATE_PRECONDITIONING});
+		if (results.charge.battery_heater_on) {
+			climateFlags |= CLIMATE_BATTERY_HEATER;
+		}
+		
 		var doorFlags = flagify(results.vehicle, {"df": DOOR_DRIVER, "pf": DOOR_PASSENGER, "dr": DOOR_REAR_LEFT, "pr": DOOR_REAR_RIGHT, "ft": DOOR_FRUNK, "rt": DOOR_LIFTGATE, "locked": DOOR_LOCKED});
 		if (results.vehicle.sun_roof_percent_open > 0) {
 			doorFlags |= DOOR_SUNROOF;
@@ -171,7 +177,7 @@ function getData() {
 			"charge_rate": results.charge.charge_rate,
 			"inside_temp": results.climate.inside_temp,
 			"outside_temp": results.climate.outside_temp,
-			"climate_flags": flagify(results.climate, {"is_climate_on": CLIMATE_ON, "smart_preconditioning": CLIMATE_PRECONDITIONING}),
+			"climate_flags": climateFlags,
 			"speed": results.drive.speed,
 			"latitude": results.drive.latitude,
 			"longitude": results.drive.longitude,

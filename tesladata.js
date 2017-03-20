@@ -94,6 +94,7 @@ function getData() {
 		return;
 	}
 	
+	log("Requesting data");
 	var options = {"authToken": g_BearerToken, "vehicleID": Config.tesla.vehicleId};
 	var results = {};
 	

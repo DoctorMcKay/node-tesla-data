@@ -1,0 +1,9 @@
+{
+	"name": "tesla-data",
+	"private": true,
+	"version": "1.0.0",
+	"dependencies": {
+		"teslajs": "^2.1.22",
+		"mysql": "^2.13.0"
+	}
+}

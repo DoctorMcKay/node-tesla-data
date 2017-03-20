@@ -1,0 +1,22 @@
+CREATE TABLE `tesla_data` (
+	`timestamp` INT(10) UNSIGNED NOT NULL,
+	`charging_state` VARCHAR(255) NULL DEFAULT NULL,
+	`battery_level` FLOAT(10,7) NULL DEFAULT NULL,
+	`battery_range` FLOAT(10,7) NULL DEFAULT NULL,
+	`charge_rate` FLOAT(10,7) NULL DEFAULT NULL,
+	`inside_temp` FLOAT(10,7) NULL DEFAULT NULL,
+	`outside_temp` FLOAT(10,7) NULL DEFAULT NULL,
+	`climate_flags` TINYINT(3) UNSIGNED NOT NULL,
+	`speed` FLOAT(10,7) NULL DEFAULT NULL,
+	`latitude` DOUBLE(10,7) NULL DEFAULT NULL,
+	`longitude` DOUBLE(10,7) NULL DEFAULT NULL,
+	`heading` FLOAT NULL DEFAULT NULL,
+	`gps_as_of` INT(10) UNSIGNED NULL DEFAULT NULL,
+	`door_flags` TINYINT(3) UNSIGNED NOT NULL,
+	`odometer` INT(11) NULL DEFAULT NULL,
+	`charge_state` BLOB NOT NULL,
+	`climate_state` BLOB NOT NULL,
+	`drive_state` BLOB NOT NULL,
+	`vehicle_state` BLOB NOT NULL,
+	PRIMARY KEY (`timestamp`)
+) COLLATE='latin1_swedish_ci' ENGINE=InnoDB;

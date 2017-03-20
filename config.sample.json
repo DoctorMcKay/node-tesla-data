@@ -1,0 +1,13 @@
+{
+	"mysql": {
+		"host": "192.168.56.5",
+		"port": 3306,
+		"user": "root",
+		"password": "",
+		"database": "tesla_data"
+	},
+	"tesla": {
+		"encryptedToken": "<encrypted refresh token>",
+		"vehicleId": "<vehicle ID from API>"
+	}
+}

@@ -4,6 +4,8 @@
 	"version": "1.0.0",
 	"dependencies": {
 		"teslajs": "^2.1.22",
-		"mysql": "^2.13.0"
+		"mysql": "^2.13.0",
+		"@doctormckay/crypto": "^1.1.0",
+		"request": "^2.81.0"
 	}
 }

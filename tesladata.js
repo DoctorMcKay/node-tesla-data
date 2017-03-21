@@ -185,10 +185,10 @@ function getData() {
 			"gps_as_of": results.drive.gps_as_of,
 			"door_flags": doorFlags,
 			"odometer": results.vehicle.odometer,
-			"charge_state": Zlib.gzipSync(JSON.stringify(results.charge)),
-			"climate_state": Zlib.gzipSync(JSON.stringify(results.climate)),
-			"drive_state": Zlib.gzipSync(JSON.stringify(results.drive)),
-			"vehicle_state": Zlib.gzipSync(JSON.stringify(results.vehicle))
+			"charge_state": JSON.stringify(results.charge),
+			"climate_state": JSON.stringify(results.climate),
+			"drive_state": JSON.stringify(results.drive),
+			"vehicle_state": JSON.stringify(results.vehicle)
 		};
 		
 		g_DB.query("INSERT INTO `tesla_data` SET ?", [cols], (err) => {

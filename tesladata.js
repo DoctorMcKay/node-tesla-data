@@ -1,7 +1,6 @@
 var Tesla = require('teslajs');
 var MySQL = require('mysql');
 var McCrypto = require('@doctormckay/crypto');
-var Request = require('request');
 var FS = require('fs');
 var Zlib = require('zlib');
 var Config = require('./config.json');
@@ -55,35 +54,21 @@ function auth() {
 	var refreshToken = McCrypto.decrypt(process.env.ENCRYPTION_KEY, new Buffer(Config.tesla.encryptedToken, 'base64'));
 	
 	log("Obtaining new bearer token...");
-	Request.post({
-		"uri": "https://owner-api.teslamotors.com/oauth/token",
-		"form": {
-			"grant_type": "refresh_token",
-			"client_id": "e4a9949fcfa04068f59abb5a658f2bac0a3428e4652315490b659d5ab3f35a9e",
-			"client_secret": "c75f14bbadc8bee3a7594412c31416f8300256d7668ea7e6e7f06727bfb9d220",
-			"refresh_token": refreshToken
-		},
-		"json": true,
-		"gzip": true
-	}, (err, res, body) => {
-		if (err || res.statusCode != 200) {
-			throw (err || new Error("HTTP error " + res.statusCode));
+	Tesla.refreshToken(refreshToken, (err, res) => {
+		if (err) {
+			throw err;
 		}
 		
-		if (body.error) {
-			throw new Error(body.error);
-		}
-		
-		if (!body.access_token || !body.refresh_token || !body.expires_in) {
+		if (!res.body.access_token || !res.body.refresh_token || !res.body.expires_in) {
 			throw new Error("Got malformed response");
 		}
 		
-		log("Got new refresh token " + body.refresh_token.substring(0, 6) + "...");
-		g_BearerToken = body.access_token;
-		Config.tesla.encryptedToken = McCrypto.encrypt(McCrypto.Cipher.AES256CTRWithHMAC, process.env.ENCRYPTION_KEY, body.refresh_token).toString('base64');
+		log("Got new refresh token " + res.body.refresh_token.substring(0, 6) + "...");
+		g_BearerToken = res.body.access_token;
+		Config.tesla.encryptedToken = McCrypto.encrypt(McCrypto.Cipher.AES256CTRWithHMAC, process.env.ENCRYPTION_KEY, res.body.refresh_token).toString('base64');
 		FS.writeFileSync(__dirname + '/config.json', JSON.stringify(Config, undefined, "\t"));
 		
-		g_BearerTokenExpiresTime = Date.now() + (1000 * (body.expires_in - (60 * 60)));
+		g_BearerTokenExpiresTime = Date.now() + (1000 * (res.body.expires_in - (60 * 60)));
 		getData();
 	});
 }

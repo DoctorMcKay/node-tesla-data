@@ -5,6 +5,8 @@ var FS = require('fs');
 var Zlib = require('zlib');
 var Config = require('./config.json');
 
+const POLL_INTERVAL = 1000 * 60;
+
 const DOOR_DRIVER = 1 << 0;
 const DOOR_PASSENGER = 1 << 1;
 const DOOR_REAR_LEFT = 1 << 2;
@@ -84,98 +86,49 @@ function getData() {
 	
 	log("Requesting data");
 	var options = {"authToken": g_BearerToken, "vehicleID": Config.tesla.vehicleId};
-	var results = {};
 	
-	Tesla.chargeState(options, (err, chargeState) => {
+	Tesla.vehicleData(options, function(err, result) {
 		if (err) {
-			log("Can't get charge state: " + (err.message || err));
-			results.charge = "error";
-			checkResults();
+			log("Can't get vehicle data: " + (err.message || err));
+			setTimeout(getData, POLL_INTERVAL);
 			return;
 		}
 		
-		results.charge = chargeState;
-		checkResults();
-	});
-	
-	Tesla.climateState(options, (err, climateState) => {
-		if (err) {
-			log("Can't get climate state: " + (err.message || err));
-			results.climate = "error";
-			checkResults();
-			return;
-		}
+		var charge = result.charge_state;
+		var climate = result.climate_state;
+		var drive = result.drive_state;
+		var vehicle = result.vehicle_state;
 		
-		results.climate = climateState;
-		checkResults();
-	});
-	
-	Tesla.driveState(options, (err, driveState) => {
-		if (err) {
-			log("Can't get drive state: " + (err.message || err));
-			results.drive = "error";
-			checkResults();
-			return;
-		}
-		
-		results.drive = driveState;
-		checkResults();
-	});
-	
-	Tesla.vehicleState(options, (err, vehicleState) => {
-		if (err) {
-			log("Can't get vehicle state: " + (err.message || err));
-			results.vehicle = "error";
-			checkResults();
-			return;
-		}
-		
-		results.vehicle = vehicleState;
-		checkResults();
-	});
-	
-	function checkResults() {
-		if (!(results.charge && results.climate && results.drive && results.vehicle)) {
-			return;
-		}
-		
-		for (var i in results) {
-			if (results.hasOwnProperty(i) && results[i] == "error") {
-				setTimeout(getData, 1000 * 60 * 5);
-				return;
-			}
-		}
-		
-		var climateFlags = flagify(results.climate, {"is_climate_on": CLIMATE_ON, "smart_preconditioning": CLIMATE_PRECONDITIONING});
-		if (results.charge.battery_heater_on) {
+		var climateFlags = flagify(climate, {"is_climate_on": CLIMATE_ON, "smart_preconditioning": CLIMATE_PRECONDITIONING});
+		if (charge.battery_heater_on) {
 			climateFlags |= CLIMATE_BATTERY_HEATER;
 		}
 		
-		var doorFlags = flagify(results.vehicle, {"df": DOOR_DRIVER, "pf": DOOR_PASSENGER, "dr": DOOR_REAR_LEFT, "pr": DOOR_REAR_RIGHT, "ft": DOOR_FRUNK, "rt": DOOR_LIFTGATE, "locked": DOOR_LOCKED});
-		if (results.vehicle.sun_roof_percent_open > 0) {
+		var doorFlags = flagify(vehicle, {"df": DOOR_DRIVER, "pf": DOOR_PASSENGER, "dr": DOOR_REAR_LEFT, "pr": DOOR_REAR_RIGHT, "ft": DOOR_FRUNK, "rt": DOOR_LIFTGATE, "locked": DOOR_LOCKED});
+		if (vehicle.sun_roof_percent_open > 0) {
 			doorFlags |= DOOR_SUNROOF;
 		}
 		
 		var cols = {
 			"timestamp": Math.floor(Date.now() / 1000),
-			"charging_state": results.charge.charging_state,
-			"battery_level": results.charge.battery_level,
-			"battery_range": results.charge.battery_range,
-			"charge_rate": results.charge.charge_rate,
-			"inside_temp": results.climate.inside_temp,
-			"outside_temp": results.climate.outside_temp,
+			"charging_state": charge.charging_state,
+			"battery_level": charge.battery_level,
+			"battery_range": charge.battery_range,
+			"charge_rate": charge.charge_rate,
+			"inside_temp": climate.inside_temp,
+			"outside_temp": climate.outside_temp,
 			"climate_flags": climateFlags,
-			"speed": results.drive.speed,
-			"latitude": results.drive.latitude,
-			"longitude": results.drive.longitude,
-			"heading": results.drive.heading,
-			"gps_as_of": results.drive.gps_as_of,
+			"speed": drive.speed,
+			"latitude": drive.latitude,
+			"longitude": drive.longitude,
+			"heading": drive.heading,
+			"gps_as_of": drive.gps_as_of,
 			"door_flags": doorFlags,
-			"odometer": results.vehicle.odometer,
-			"charge_state": JSON.stringify(results.charge),
-			"climate_state": JSON.stringify(results.climate),
-			"drive_state": JSON.stringify(results.drive),
-			"vehicle_state": JSON.stringify(results.vehicle)
+			"odometer": vehicle.odometer,
+			"charge_state": JSON.stringify(charge),
+			"climate_state": JSON.stringify(climate),
+			"drive_state": JSON.stringify(drive),
+			"vehicle_state": JSON.stringify(vehicle)
 		};
 		
 		g_DB.query("INSERT INTO `tesla_data` SET ?", [cols], (err) => {
@@ -184,7 +137,7 @@ function getData() {
 			}
 			
 			log("Recorded data in database at time " + cols.timestamp);
-			setTimeout(getData, 1000 * 60 * 5);
+			setTimeout(getData, POLL_INTERVAL);
 		});
 	}
 }

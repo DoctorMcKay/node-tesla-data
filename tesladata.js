@@ -139,7 +139,7 @@ function getData() {
 			log("Recorded data in database at time " + cols.timestamp);
 			setTimeout(getData, POLL_INTERVAL);
 		});
-	}
+	});
 }
 
 function flagify(obj, flags) {

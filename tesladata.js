@@ -1,11 +1,9 @@
-var Tesla = require('teslajs');
-var MySQL = require('mysql');
-var McCrypto = require('@doctormckay/crypto');
-var FS = require('fs');
-var Zlib = require('zlib');
-var Config = require('./config.json');
-
-const POLL_INTERVAL = 1000 * 60 * 5;
+const Tesla = require('teslajs');
+const MySQL = require('mysql');
+const McCrypto = require('@doctormckay/crypto');
+const FS = require('fs');
+const HTTP = require('http');
+const Config = require('./config.json');
 
 const DOOR_DRIVER = 1 << 0;
 const DOOR_PASSENGER = 1 << 1;
@@ -20,9 +18,30 @@ const CLIMATE_ON = 1 << 0;
 const CLIMATE_PRECONDITIONING = 1 << 1;
 const CLIMATE_BATTERY_HEATER = 1 << 2;
 
+const VehicleState = {
+	"Unknown": 0,
+	"Charging": 1,
+	"Supercharging": 2,
+	"Driving": 3,
+	"Parked": 4,
+	"Awoken": 5
+};
+
+var g_VehicleStateInterval = {}; // these are in minutes
+g_VehicleStateInterval[VehicleState.Unknown] = 1;
+g_VehicleStateInterval[VehicleState.Charging] = 5;
+g_VehicleStateInterval[VehicleState.Supercharging] = 1;
+g_VehicleStateInterval[VehicleState.Driving] = 1;
+g_VehicleStateInterval[VehicleState.Parked] = 30;
+g_VehicleStateInterval[VehicleState.Awoken] = 1;
+
 var g_BearerToken;
 var g_BearerTokenExpiresTime = Infinity;
 var g_DB;
+var g_CurrentState = VehicleState.Unknown;
+var g_LastState = VehicleState.Unknown;
+var g_LastStateChange = 0;
+var g_PollTimer;
 
 function log(msg) {
 	var date = new Date();
@@ -78,6 +97,8 @@ function auth() {
 }
 
 function getData() {
+	clearTimeout(g_PollTimer);
+
 	if (g_BearerTokenExpiresTime <= Date.now()) {
 		g_BearerTokenExpiresTime = Infinity;
 		auth();
@@ -90,8 +111,16 @@ function getData() {
 	Tesla.vehicleData(options, function(err, result) {
 		if (err) {
 			log("Can't get vehicle data: " + (err.message || err));
-			setTimeout(getData, POLL_INTERVAL);
+			enqueueRequest();
 			return;
+		}
+
+		let state = getState(result);
+		if (state != g_CurrentState) {
+			log("State is now " + state + " (was " + g_LastState + ")");
+			g_LastState = g_CurrentState;
+			g_CurrentState = state;
+			g_LastStateChange = Date.now();
 		}
 		
 		var charge = result.charge_state;
@@ -137,9 +166,40 @@ function getData() {
 			}
 			
 			log("Recorded data in database at time " + cols.timestamp);
-			setTimeout(getData, POLL_INTERVAL);
+			enqueueRequest();
 		});
 	});
+}
+
+function enqueueRequest() {
+	clearTimeout(g_PollTimer);
+
+	let timeout = g_VehicleStateInterval[g_CurrentState];
+	let usingLast = false;
+
+	if (Date.now() - g_LastStateChange < 1000 * 60 * 10) {
+		timeout = Math.min(timeout, g_VehicleStateInterval[g_LastState]);
+		usingLast = true;
+	}
+
+	log("Enqueueing next request in " + timeout + " minute(s) due to state " + g_CurrentState + (usingLast ? " (and previous " + g_LastState + ")" : ""));
+	g_PollTimer = setTimeout(getData, 1000 * 60 * timeout);
+}
+
+function getState(response) {
+	if (response.charge_state && response.charge_state.charging_state == "Charging" && response.charge_state.fast_charger_present) {
+		return VehicleState.Supercharging;
+	}
+
+	if (response.charge_state && response.charge_state.charging_state == "Charging") {
+		return VehicleState.Charging;
+	}
+
+	if (response.drive_state && response.drive_state.shift_state) {
+		return VehicleState.Driving;
+	}
+
+	return VehicleState.Parked;
 }
 
 function flagify(obj, flags) {
@@ -153,3 +213,28 @@ function flagify(obj, flags) {
 	
 	return out;
 }
+
+HTTP.createServer((req, res) => {
+	if (req.method == 'GET' && req.url == '/vehicle_state') {
+		req.on('data', () => {});
+		res.setHeader("Content-Type", "application/json; charset=UTF-8");
+		res.end(JSON.stringify({"current_state": g_CurrentState, "last_state": g_LastState, "now": Date.now(), "last_change": g_LastStateChange}));
+	} else if (req.method == 'POST' && req.url == '/awake') {
+		log("Awoken from external input");
+
+		g_LastState = g_CurrentState;
+		g_CurrentState = VehicleState.Awoken;
+		g_LastStateChange = Date.now();
+		getData();
+
+		req.on('data', () => {});
+		res.statusCode = 204;
+		res.statusMessage = "No Content";
+		res.end();
+	} else {
+		res.statusCode = 404;
+		res.statusMessage = "Not Found";
+		res.setHeader("Content-Type", "text/plain; charset=UTF-8");
+		res.end("Not Found");
+	}
+}).listen(2019, "127.0.0.1");

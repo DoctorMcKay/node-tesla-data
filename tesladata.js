@@ -5,7 +5,7 @@ var FS = require('fs');
 var Zlib = require('zlib');
 var Config = require('./config.json');
 
-const POLL_INTERVAL = 1000 * 60;
+const POLL_INTERVAL = 1000 * 60 * 5;
 
 const DOOR_DRIVER = 1 << 0;
 const DOOR_PASSENGER = 1 << 1;

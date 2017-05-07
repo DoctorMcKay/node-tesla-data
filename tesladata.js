@@ -117,7 +117,7 @@ function getData() {
 
 		let state = getState(result);
 		if (state != g_CurrentState) {
-			log("State is now " + state + " (was " + g_LastState + ")");
+			log("State is now " + state + " (was " + g_CurrentState + ")");
 			g_LastState = g_CurrentState;
 			g_CurrentState = state;
 			g_LastStateChange = Date.now();

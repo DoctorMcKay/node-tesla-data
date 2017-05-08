@@ -137,10 +137,15 @@ function getData() {
 		if (vehicle.sun_roof_percent_open > 0) {
 			doorFlags |= DOOR_SUNROOF;
 		}
+
+		let chargeState = charge.charging_state;
+		if (chargeState === null) {
+			chargeState = charge.charge_port_door_open ? 'Complete' : 'Disconnected';
+		}
 		
 		var cols = {
 			"timestamp": Math.floor(Date.now() / 1000),
-			"charging_state": charge.charging_state,
+			"charging_state": chargeState,
 			"battery_level": charge.battery_level,
 			"battery_range": charge.battery_range,
 			"charge_rate": charge.charge_rate,

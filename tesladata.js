@@ -263,7 +263,7 @@ HTTP.createServer((req, res) => {
 		res.statusCode = 204;
 		res.statusMessage = "No Content";
 		res.end();
-	} else if (req.method == 'POST' && req.url.match(/^\/command\/[a-z_]+$/ && g_VehicleCommands[req.url.substring(9)])) {
+	} else if (req.method == 'POST' && req.url.match(/^\/command\/[a-z_]+$/) && g_VehicleCommands[req.url.substring(9)]) {
 		let command = req.url.substring(9);
 		log("Received command " + command);
 

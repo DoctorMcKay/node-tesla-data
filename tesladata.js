@@ -49,6 +49,8 @@ const g_VehicleCommands = {
 	}
 };
 
+const g_VehicleCommandsWithRefresh = ["lock", "unlock", "start_climate", "stop_climate"];
+
 var g_VehicleStateInterval = {}; // these are in minutes
 g_VehicleStateInterval[VehicleState.Unknown] = 1;
 g_VehicleStateInterval[VehicleState.Charging] = 5;
@@ -275,7 +277,10 @@ HTTP.createServer((req, res) => {
 			} else {
 				log("Sent command " + command + " successfully");
 				res.end(JSON.stringify({"success": true}));
-				setTimeout(getData, 1000);
+
+				if (g_VehicleCommandsWithRefresh.includes(command)) {
+					setTimeout(getData, 1000);
+				}
 			}
 		});
 	} else {

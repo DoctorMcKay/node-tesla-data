@@ -279,6 +279,7 @@ HTTP.createServer((req, res) => {
 			}
 		});
 	} else {
+		log("Internal URL not found: " + req.url);
 		res.statusCode = 404;
 		res.statusMessage = "Not Found";
 		res.setHeader("Content-Type", "text/plain; charset=UTF-8");

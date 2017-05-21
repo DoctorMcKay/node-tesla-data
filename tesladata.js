@@ -24,7 +24,29 @@ const VehicleState = {
 	"Supercharging": 2,
 	"Driving": 3,
 	"Parked": 4,
-	"Awoken": 5
+	"Awoken": 5,
+	"ClimateOn": 6
+};
+
+const g_VehicleCommands = {
+	"lock": function(callback) {
+		Tesla.doorLock({"authToken": g_BearerToken, "vehicleID": Config.tesla.vehicleId}, callback);
+	},
+	"unlock": function(callback) {
+		Tesla.doorUnlock({"authToken": g_BearerToken, "vehicleID": Config.tesla.vehicleId}, callback);
+	},
+	"start_climate": function(callback) {
+		Tesla.climateStart({"authToken": g_BearerToken, "vehicleID": Config.tesla.vehicleId}, callback);
+	},
+	"stop_climate": function(callback) {
+		Tesla.climateStop({"authToken": g_BearerToken, "vehicleID": Config.tesla.vehicleId}, callback);
+	},
+	"flash_lights": function(callback) {
+		Tesla.flashLights({"authToken": g_BearerToken, "vehicleID": Config.tesla.vehicleId}, callback);
+	},
+	"honk_horn": function(callback) {
+		Tesla.honkHorn({"authToken": g_BearerToken, "vehicleID": Config.tesla.vehicleId}, callback);
+	}
 };
 
 var g_VehicleStateInterval = {}; // these are in minutes
@@ -34,6 +56,7 @@ g_VehicleStateInterval[VehicleState.Supercharging] = 1;
 g_VehicleStateInterval[VehicleState.Driving] = 1;
 g_VehicleStateInterval[VehicleState.Parked] = 30;
 g_VehicleStateInterval[VehicleState.Awoken] = 1;
+g_VehicleStateInterval[VehicleState.ClimateOn] = 1;
 
 var g_BearerToken;
 var g_BearerTokenExpiresTime = Infinity;
@@ -204,6 +227,10 @@ function getState(response) {
 		return VehicleState.Driving;
 	}
 
+	if (response.climate_state && response.climate_state.is_climate_on) {
+		return VehicleState.ClimateOn;
+	}
+
 	return VehicleState.Parked;
 }
 
@@ -236,6 +263,21 @@ HTTP.createServer((req, res) => {
 		res.statusCode = 204;
 		res.statusMessage = "No Content";
 		res.end();
+	} else if (req.method == 'POST' && req.url.match(/^\/command\/[a-z_]+$/ && g_VehicleCommands[req.url.substring(9)])) {
+		let command = req.url.substring(9);
+		log("Received command " + command);
+
+		res.setHeader("Content-Type", "application/json; charset=UTF-8");
+		g_VehicleCommands[command]((err) => {
+			if (err) {
+				log("Cannot send command " + command + ": " + err.message);
+				res.end(JSON.stringify({"success": false, "error": err.message}));
+			} else {
+				log("Sent command " + command + " successfully");
+				res.end(JSON.stringify({"success": true}));
+				setTimeout(getData, 1000);
+			}
+		});
 	} else {
 		res.statusCode = 404;
 		res.statusMessage = "Not Found";

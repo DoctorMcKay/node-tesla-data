@@ -46,6 +46,27 @@ const g_VehicleCommands = {
 	},
 	"honk_horn": function(callback) {
 		Tesla.honkHorn({"authToken": g_BearerToken, "vehicleID": Config.tesla.vehicleId}, callback);
+	},
+	"start_charge": function(callback) {
+		Tesla.startCharge({"authToken": g_BearerToken, "vehicleID": Config.tesla.vehicleId}, callback);
+	},
+	"stop_charge": function(callback) {
+		Tesla.stopCharge({"authToken": g_BearerToken, "vehicleID": Config.tesla.vehicleId}, callback);
+	},
+	"open_charge_port": function(callback) {
+		Tesla.openChargePort({"authToken": g_BearerToken, "vehicleID": Config.tesla.vehicleId}, callback);
+	},
+	"close_charge_port": function(callback) {
+		Tesla.closeChargePort({"authToken": g_BearerToken, "vehicleID": Config.tesla.vehicleId}, callback);
+	},
+	"wake_up": function(callback) {
+		Tesla.wakeUp({"authToken": g_BearerToken, "vehicleID": Config.tesla.vehicleId}, callback);
+	},
+	"vent_sunroof": function(callback) {
+		Tesla.sunRoofControl({"authToken": g_BearerToken, "vehicleID": Config.tesla.vehicleId}, Tesla.SUNROOF_VENT, callback);
+	},
+	"close_sunroof": function(callback) {
+		Tesla.sunRoofControl({"authToken": g_BearerToken, "vehicleID": Config.tesla.vehicleId}, Tesla.SUNROOF_CLOSED, callback);
 	}
 };
 

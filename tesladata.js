@@ -70,7 +70,7 @@ const g_VehicleCommands = {
 	}
 };
 
-const g_VehicleCommandsWithRefresh = ["lock", "unlock", "start_climate", "stop_climate"];
+const g_VehicleCommandsWithRefresh = ["lock", "unlock", "start_climate", "stop_climate", "wake_up", "vent_sunroof", "close_sunroof", "open_charge_port", "close_charge_port", "start_charge", "stop_charge"];
 
 var g_VehicleStateInterval = {}; // these are in minutes
 g_VehicleStateInterval[VehicleState.Unknown] = 1;
@@ -88,6 +88,7 @@ var g_CurrentState = VehicleState.Unknown;
 var g_LastState = VehicleState.Unknown;
 var g_LastStateChange = 0;
 var g_PollTimer;
+var g_LastPoll = 0;
 
 function log(msg) {
 	var date = new Date();
@@ -148,6 +149,12 @@ function getData() {
 	if (g_BearerTokenExpiresTime <= Date.now()) {
 		g_BearerTokenExpiresTime = Infinity;
 		auth();
+		return;
+	}
+
+	if (Date.now() - g_LastPoll < 10000) {
+		// last poll was <10 seconds ago
+		enqueueRequest();
 		return;
 	}
 	

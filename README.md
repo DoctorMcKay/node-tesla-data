@@ -66,3 +66,7 @@ Execute a command on the car. Available commands are:
 - close_sunroof (if equipped)
 
 Response is JSON with a boolean `success` parameter. In event of failure, there is also a string `error`.
+
+# Frontend UI
+
+There isn't one. You'll need to write one yourself.

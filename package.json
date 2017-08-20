@@ -2,6 +2,8 @@
 	"name": "tesla-data",
 	"private": true,
 	"version": "1.0.0",
+	"author": "Alexander Corn <mckay@doctormckay.com>",
+	"license": "GPLv3",
 	"dependencies": {
 		"teslajs": "^2.1.28",
 		"mysql": "^2.13.0",

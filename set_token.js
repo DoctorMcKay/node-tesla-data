@@ -1,7 +1,6 @@
-// 6c78e56b55b5f7313633f64b4e46f2512595ae8f5ae3edc561908b7e88e60ce1
-var McCrypto = require('@doctormckay/crypto');
-var ReadLine = require('readline');
-var FS = require('fs');
+const McCrypto = require('@doctormckay/crypto');
+const ReadLine = require('readline');
+const FS = require('fs');
 var Config = require('./config.json');
 
 if (!process.env.ENCRYPTION_KEY) {

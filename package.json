@@ -6,5 +6,8 @@
 		"teslajs": "^2.1.28",
 		"mysql": "^2.13.0",
 		"@doctormckay/crypto": "^1.1.0"
+	},
+	"engines": {
+		"node": ">=6.0.0"
 	}
 }

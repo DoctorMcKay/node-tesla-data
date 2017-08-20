@@ -25,6 +25,27 @@ Data is recorded to a MySQL table. The query you should use to create the table 
 5. Pick the ID (not the VIN) of the vehicle you want to track, and put it in `config.json`.
 6. Now all you need to do is run `tesladata.js`, being sure to supply your `ENCRYPTION_KEY`. If you want to run it as a daemon, [forever](https://www.npmjs.com/package/forever) is a good way to do that.
 
+# Flags
+
+Two types of data are stored in the database as bitwise flags.
+
+### climate_flags
+
+- `CLIMATE_ON` = 1 << 0 (1)
+- `CLIMATE_PRECONDITIONING` = 1 << 1 (2)
+- `CLIMATE_BATTERY_HEATER` = 1 << 2 (4)
+
+### door_flags
+
+- `DOOR_DRIVER` = 1 << 0 (1) [indicates driver's door is open]
+- `DOOR_PASSENGER` = 1 << 1 (2)
+- `DOOR_REAR_LEFT` = 1 << 2 (4)
+- `DOOR_REAR_RIGHT` = 1 << 3 (8)
+- `DOOR_FRUNK` = 1 << 4 (16)
+- `DOOR_LIFTGATE` = 1 << 5 (32)
+- `DOOR_SUNROOF` = 1 << 6 (64)
+- `DOOR_LOCKED` = 1 << 7 (128)
+
 # External Input
 
 The app creates an HTTP server on localhost (127.0.0.1) port 2019. You can use these URLs:

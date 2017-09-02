@@ -24,6 +24,9 @@ Data is recorded to a MySQL table. The query you should use to create the table 
 4. Run `node auth.js` and enter your MyTesla username and password when prompted. This will save your encrypted refresh token to `config.json`, and will display a list of all your vehicles.
 5. Pick the ID (not the VIN) of the vehicle you want to track, and put it in `config.json`.
 6. Now all you need to do is run `tesladata.js`, being sure to supply your `ENCRYPTION_KEY`. If you want to run it as a daemon, [forever](https://www.npmjs.com/package/forever) is a good way to do that.
+    - Install forever with: `npm install -g forever` (run with `sudo` or an elevated command prompt)
+    - To run on Linux with an encryption key: `ENCRYPTION_KEY=keyhere forever start tesladata.js`
+    - Once invoked with the key, you can restart it without supplying the key: `forever restart tesladata.js`
 
 # Flags
 

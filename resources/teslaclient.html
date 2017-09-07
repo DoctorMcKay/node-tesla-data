@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html>
+	<head>
+		<title>Tesla Streaming Client</title>
+		<meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
+		<script src="teslaclient.js"></script>
+	</head>
+	<body>
+		<div id="setup-panel">
+			<input type="text" id="ws-url" placeholder="WebSocket URL" />
+			<input type="text" id="vehicle-id" placeholder="Vehicle ID" />
+			<input type="password" id="ws-password" placeholder="WebSocket Password" />
+			<button type="button" id="do-connect">Connect To Tesla</button>
+			<button type="button" id="do-disconnect" disabled>Disconnect</button>
+			<button type="button" id="do-homelink" disabled>Trigger HomeLink</button>
+		</div>
+		<pre id="output-panel"></pre>
+		<script>
+			var $ = document.querySelector.bind(document);
+
+			var g_TeslaClient;
+
+			// Hook the connect button
+			$('#do-connect').addEventListener('click', function(e) {
+				var vehicleId = $('#vehicle-id').value;
+				var wsUrl = $('#ws-url').value;
+				var wsPassword = $('#ws-password').value;
+				if (!vehicleId || !wsUrl || !wsUrl.match(/^wss?:\/\//) || !wsPassword) {
+					output("Please enter a vehicle ID, WebSocket URL (in format wss://host.com/connect/), and WebSocket password");
+					return;
+				}
+
+				doConnect();
+			});
+
+			$('#do-disconnect').addEventListener('click', function(e) {
+				g_TeslaClient.disconnect();
+			});
+
+			$('#do-homelink').addEventListener('click', function(e) {
+				g_TeslaClient.triggerHomelink(this.dataset.lat, this.dataset.lng);
+			});
+
+			function doConnect() {
+				var connectBtn = $('#do-connect');
+				var vehicleIdBox = $('#vehicle-id');
+				var wsUrlBox = $('#ws-url');
+				var passwordBox = $('#ws-password');
+				setDisabled(true);
+				output("Connecting...");
+
+				g_TeslaClient = new TeslaStreamingClient(wsUrlBox.value, vehicleIdBox.value, passwordBox.value);
+				g_TeslaClient.spew = true;
+				g_TeslaClient.onopen = function() {
+					$('#do-disconnect').disabled = false;
+					output("Connected!");
+				};
+
+				g_TeslaClient.onclose = function(code, reason) {
+					$('#do-disconnect').disabled = true;
+					$('#do-homelink').disabled = true;
+					setDisabled(false);
+					output("Disconnected (code = " + code + "; reason = \"" + reason + "\")");
+				};
+
+				g_TeslaClient.onerror = function() {
+					$('#do-disconnect').disabled = true;
+					$('#do-homelink').disabled = true;
+					setDisabled(false);
+					output("An error occurred");
+				};
+
+				g_TeslaClient.ongps = function(latitude, longitude, heading) {
+					var homelinkButton = $('#do-homelink');
+					homelinkButton.disabled = false;
+					homelinkButton.dataset.lat = latitude;
+					homelinkButton.dataset.lng = longitude;
+				};
+
+				g_TeslaClient.onhomelinkstatus = function(nearby) {
+					if (nearby) {
+						output("Have nearby HomeLink; can trigger");
+					} else {
+						output("No HomeLink appears to be nearby");
+					}
+				};
+
+				g_TeslaClient.onhomelinkresult = function(success, reason) {
+					if (success) {
+						output("HomeLink triggered successfully");
+					} else {
+						output("HomeLink failed: " + reason);
+					}
+				};
+
+				g_TeslaClient.onautoparkstatus = function(state) {
+					switch (state) {
+						case 'standby':
+							output("Summon is not ready");
+							break;
+
+						case 'ready':
+							output("Summon is ready");
+							break;
+					}
+				};
+			}
+
+			function setDisabled(disabled) {
+				$('#do-connect').disabled = disabled;
+				$('#vehicle-id').disabled = disabled;
+				$('#ws-url').disabled = disabled;
+				$('#ws-password').disabled = disabled;
+			}
+
+			function output(msg) {
+				$('#output-panel').innerHTML += msg + "\n";
+			}
+		</script>
+	</body>
+</html>

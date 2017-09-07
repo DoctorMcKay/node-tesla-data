@@ -1,9 +1,13 @@
-const Tesla = require('teslajs');
-const MySQL = require('mysql');
-const McCrypto = require('@doctormckay/crypto');
 const FS = require('fs');
 const HTTP = require('http');
+const McCrypto = require('@doctormckay/crypto');
+const MySQL = require('mysql');
+const Tesla = require('teslajs');
+const WS13 = require('websocket13');
+
 const Config = require('./config.json');
+const WebSocketProxy = require('./components/websocket_proxy.js');
+const log = require('./components/log.js');
 
 const DOOR_DRIVER = 1 << 0;
 const DOOR_PASSENGER = 1 << 1;
@@ -89,18 +93,6 @@ var g_LastState = VehicleState.Unknown;
 var g_LastStateChange = 0;
 var g_PollTimer;
 var g_LastPoll = 0;
-
-function log(msg) {
-	var date = new Date();
-	var time = date.getFullYear() + "-" +
-		(date.getMonth() + 1 < 10 ? '0' : '') + (date.getMonth() + 1) + "-" +
-		(date.getDate() < 10 ? '0' : '') + date.getDate() + " " +
-		(date.getHours() < 10 ? '0' : '') + date.getHours() + ":" +
-		(date.getMinutes() < 10 ? '0' : '') + date.getMinutes() + ":" +
-		(date.getSeconds() < 10 ? '0' : '') + date.getSeconds();
-	
-	console.log(time + " - " + msg);
-}
 
 if (!process.env.ENCRYPTION_KEY) {
 	log("Encryption key needed");
@@ -276,7 +268,8 @@ function flagify(obj, flags) {
 	return out;
 }
 
-HTTP.createServer((req, res) => {
+// Set up the HTTP server
+var webServer = HTTP.createServer((req, res) => {
 	if (req.method == 'GET' && req.url == '/vehicle_state') {
 		req.on('data', () => {});
 		res.setHeader("Content-Type", "application/json; charset=UTF-8");
@@ -318,4 +311,97 @@ HTTP.createServer((req, res) => {
 		res.setHeader("Content-Type", "text/plain; charset=UTF-8");
 		res.end("Not Found");
 	}
-}).listen(2019, "127.0.0.1");
+});
+webServer.listen(2019, "127.0.0.1");
+
+// Set up the WebSocket server
+var wsServer = new WS13.WebSocketServer({"pingInterval": 1000, "pingTimeout": 2000});
+wsServer.http(webServer);
+wsServer.on('handshake', (handshakeData, reject, accept) => {
+	var match = handshakeData.path.match(/^\/connect\/(\d+)\/?$/);
+	if (!match) {
+		reject(404, "Not Found");
+		return;
+	}
+
+	if (!Config.tesla.email || !Config.tesla.websocketPassword) {
+		reject(400, "No email or WebSocket password configured");
+		return;
+	}
+	
+	if (handshakeData.query.password != Config.tesla.websocketPassword) {
+		reject(403, "Incorrect password");
+		return;
+	}
+
+	var vehicleId = match[1];
+	// Get the vehicle tokens
+	Tesla.allVehicles({"authToken": g_BearerToken}, (err, vehicles) => {
+		if (err) {
+			log("Cannot retrieve vehicle list: " + err.message);
+			reject(502, "Cannot get vehicle list");
+			return;
+		}
+
+		vehicles = vehicles.filter(vehicle => vehicle.vehicle_id == vehicleId);
+		if (vehicles.length != 1) {
+			log("Cannot find vehicle " + vehicleId);
+			reject(400, "Cannot find requested vehicle");
+			return;
+		}
+
+		var vehicle = vehicles[0];
+		if (!vehicle.tokens || !vehicle.tokens[0]) {
+			log("No vehicle token for vehicle " + vehicleId);
+			reject(500, "Cannot get vehicle token");
+			return;
+		}
+
+		// Establish our connection
+		log("Connecting to: wss://" + Config.tesla.email + ":" + vehicle.tokens[0] + "@streaming.vn.teslamotors.com/connect/" + vehicleId);
+		var wsClient = new WS13.WebSocket("wss://" + Config.tesla.email + ":" + vehicle.tokens[0] + "@streaming.vn.teslamotors.com/connect/" + vehicleId);
+		wsClient.on('connected', onConnect);
+		wsClient.on('disconnected', onDisconnect);
+		wsClient.on('error', onError);
+
+		function onConnect(details) {
+			log("Connected to Tesla WebSocket API");
+			cleanup();
+			var sock = accept();
+			new WebSocketProxy(sock, wsClient);
+
+			// We need the vehicle's GPS position
+			Tesla.driveState({"authToken": g_BearerToken, "vehicleID": vehicle.id_s}, (err, driveState) => {
+				if (err) {
+					log("Cannot get drive state: " + err.message);
+					return;
+				}
+
+				sock.send(JSON.stringify({
+					"msg_type": "internal:gps",
+					"latitude": driveState.latitude,
+					"longitude": driveState.longitude,
+					"heading": driveState.heading
+				}));
+			});
+		}
+
+		function onDisconnect(code, reason, initiatedByUs) {
+			log("Disconnected from Tesla WebSocket API: " + code + " (" + reason + ")");
+			cleanup();
+			reject(502, "Cannot connect to streaming API: " + code);
+		}
+
+		function onError(err) {
+			log("Error from Tesla WebSocket API: " + err.message);
+			cleanup();
+			reject(502, "Cannot connect to streaming API");
+		}
+
+		function cleanup() {
+			wsClient.removeListener('connected', onConnect);
+			wsClient.removeListener('disconnected', onDisconnect);
+			wsClient.removeListener('error', onError);
+		}
+	});
+});

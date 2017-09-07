@@ -7,6 +7,7 @@
 		"database": "tesla_data"
 	},
 	"tesla": {
+		"email": "<MyTesla email address>",
 		"encryptedToken": "<encrypted refresh token>",
 		"vehicleId": "<vehicle ID from API>"
 	}

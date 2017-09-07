@@ -88,6 +88,7 @@ Execute a command on the car. Available commands are:
 - wake_up
 - vent_sunroof (if equipped)
 - close_sunroof (if equipped)
+- trigger_homelink (requires you to set your MyTesla email in config.json)
 
 Response is JSON with a boolean `success` parameter. In event of failure, there is also a string `error`.
 

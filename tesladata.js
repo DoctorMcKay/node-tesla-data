@@ -71,6 +71,9 @@ const g_VehicleCommands = {
 	},
 	"close_sunroof": function(callback) {
 		Tesla.sunRoofControl({"authToken": g_BearerToken, "vehicleID": Config.tesla.vehicleId}, Tesla.SUNROOF_CLOSED, callback);
+	},
+	"trigger_homelink": function(callback) {
+		triggerHomeLink(callback);
 	}
 };
 
@@ -405,3 +408,125 @@ wsServer.on('handshake', (handshakeData, reject, accept) => {
 		}
 	});
 });
+
+function triggerHomeLink(callback) {
+	// This is a bit more involved than it really needs to be
+	Tesla.allVehicles({"authToken": g_BearerToken}, (err, vehicles) => {
+		if (err) {
+			callback(err);
+			return;
+		}
+
+		var vehicle = vehicles.filter(vehicle => vehicle.id_s == Config.tesla.vehicleId);
+		if (vehicle.length != 1) {
+			callback(new Error("Cannot find vehicle"));
+			return;
+		}
+
+		if (!vehicle[0].tokens || !vehicle[0].tokens[0]) {
+			callback(new Error("No tokens found"));
+			return;
+		}
+
+		var driveStateFailed = null;
+		var latitude = null;
+		var longitude = null;
+
+		Tesla.driveState({"authToken": g_BearerToken, "vehicleID": Config.tesla.vehicleId}, (err, driveState) => {
+			if (err) {
+				driveStateFailed = err;
+				return;
+			}
+
+			latitude = driveState.latitude;
+			longitude = driveState.longitude;
+		});
+
+		var success = false;
+
+		var otherVehicleId = vehicle[0].vehicle_id;
+		var token = vehicle[0].tokens[0];
+		var ws = new WS13.WebSocket("wss://" + Config.tesla.email + ":" + token + "@streaming.vn.teslamotors.com/connect/" + otherVehicleId);
+		ws.on('connected', () => {
+			log("WS connected to Tesla API");
+		});
+
+		ws.on('disconnected', (code, reason, initiatedByUs) => {
+			if (initiatedByUs) {
+				log("Successfully disconnected from Tesla WS API");
+			} else {
+				log("Disconnected from Tesla WS API: " + code + " (" + reason + ")");
+				if (!success) {
+					callback(new Error("Disconnected from Tesla"));
+				}
+			}
+		});
+
+		ws.on('error', (err) => {
+			log("Got error with Tesla WS API: " + err.message);
+			if (!success) {
+				callback(err);
+			}
+		});
+
+		ws.on('message', (type, data) => {
+			data = data.toString('utf8');
+			try {
+				data = JSON.parse(data);
+			} catch (ex) {
+				callback(ex);
+				return;
+			}
+
+			if (data.msg_type == 'homelink:status') {
+				// that's our cue
+				var attempts = 0;
+				tryExecHomeLink();
+
+				function tryExecHomeLink() {
+					if (driveStateFailed) {
+						callback(driveStateFailed);
+						return;
+					}
+
+					if (!latitude || !longitude) {
+						if (++attempts > 30) {
+							callback(new Error("Cannot get drive state"));
+							try {
+								ws.disconnect(1000);
+							} catch (ex) {
+								// whatever
+							}
+							return;
+						}
+						setTimeout(tryExecHomeLink, 100);
+						return;
+					}
+
+					// we have our drive state
+					log("Sending HomeLink trigger command");
+					ws.send(JSON.stringify({
+						"msg_type": "homelink:cmd_trigger",
+						"latitude": latitude,
+						"longitude": longitude
+					}));
+				}
+			} else if (data.msg_type == 'homelink:cmd_result') {
+				success = true;
+
+				if (data.result) {
+					// success
+					callback(null);
+				} else {
+					callback(new Error(data.reason || "Could not trigger HomeLink"));
+				}
+
+				try {
+					ws.disconnect(1000);
+				} catch (ex) {
+					// don't care
+				}
+			}
+		});
+	});
+}

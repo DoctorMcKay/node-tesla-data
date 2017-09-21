@@ -96,6 +96,7 @@ var g_LastState = VehicleState.Unknown;
 var g_LastStateChange = 0;
 var g_PollTimer;
 var g_LastPoll = 0;
+var g_DataListenerSockets = [];
 
 if (!process.env.ENCRYPTION_KEY) {
 	log("Encryption key needed");
@@ -162,6 +163,10 @@ function getData() {
 			enqueueRequest();
 			return;
 		}
+
+		g_DataListenerSockets.forEach((socket) => {
+			socket.send(JSON.stringify(result));
+		});
 
 		let state = getState(result);
 		if (state != g_CurrentState) {
@@ -322,7 +327,7 @@ var wsServer = new WS13.WebSocketServer({"pingInterval": 1000, "pingTimeout": 20
 wsServer.http(webServer);
 wsServer.on('handshake', (handshakeData, reject, accept) => {
 	var match = handshakeData.path.match(/^\/connect\/(\d+)\/?$/);
-	if (!match) {
+	if (!match && handshakeData.path != "/wsdata/") {
 		reject(404, "Not Found");
 		return;
 	}
@@ -334,6 +339,30 @@ wsServer.on('handshake', (handshakeData, reject, accept) => {
 	
 	if (handshakeData.query.password != Config.tesla.websocketPassword) {
 		reject(403, "Incorrect password");
+		return;
+	}
+
+	if (handshakeData.path == "/wsdata/") {
+		log("Incoming WS data socket connection from " + handshakeData.remoteAddress);
+		var client = accept();
+		g_DataListenerSockets.push(client);
+
+		client.on('disconnected', (code, reason, initiatedByUs) => {
+			log("Client from " + handshakeData.remoteAddress + " disconnected: \"" + reason + "\" (" + code + ")");
+			var idx = g_DataListenerSockets.indexOf(client);
+			if (idx != -1) {
+				g_DataListenerSockets.splice(idx, 1);
+			}
+		});
+
+		client.on('error', (err) => {
+			log("Client from " + handshakeData.remoteAddress + " experienced error: " + err.message);
+			var idx = g_DataListenerSockets.indexOf(client);
+			if (idx != -1) {
+				g_DataListenerSockets.splice(idx, 1);
+			}
+		});
+
 		return;
 	}
 

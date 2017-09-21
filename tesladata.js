@@ -165,7 +165,7 @@ function getData() {
 		}
 
 		g_DataListenerSockets.forEach((socket) => {
-			socket.send(JSON.stringify(result));
+			socket.send({"type": "vehicle_update", "data": JSON.stringify(result)});
 		});
 
 		let state = getState(result);

@@ -344,7 +344,11 @@ wsServer.on('handshake', (handshakeData, reject, accept) => {
 
 	if (handshakeData.path == "/wsdata/") {
 		log("Incoming WS data socket connection from " + handshakeData.remoteAddress);
-		var client = accept();
+		var client = accept({
+			"options": {
+				"pingInterval": 30000
+			}
+		});
 		g_DataListenerSockets.push(client);
 
 		client.on('disconnected', (code, reason, initiatedByUs) => {

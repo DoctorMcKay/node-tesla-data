@@ -315,7 +315,7 @@ var webServer = HTTP.createServer((req, res) => {
 		res.end("Not Found");
 	}
 });
-webServer.listen(2019, "127.0.0.1");
+webServer.listen(Config.httpPort || 2019, "127.0.0.1");
 
 // Set up the WebSocket server
 var wsServer = new WS13.WebSocketServer({"pingInterval": 1000, "pingTimeout": 2000});

@@ -88,7 +88,7 @@ g_VehicleStateInterval[VehicleState.Parked] = 30;
 g_VehicleStateInterval[VehicleState.Awoken] = 1;
 g_VehicleStateInterval[VehicleState.ClimateOn] = 1;
 
-var g_BearerToken;
+var g_BearerToken = NULL;
 var g_BearerTokenExpiresTime = Infinity;
 var g_DB;
 var g_CurrentState = VehicleState.Unknown;
@@ -111,7 +111,9 @@ function connectDB(){
 		}
 
 		log("Connected to MySQL with thread ID " + g_DB.threadId);
-		auth();
+		if(g_BearerToken === NULL){  //we only want to auth() if we don't already have a token.
+			auth();
+		}
 	});
 	
 	g_DB.on('error', function(err) {

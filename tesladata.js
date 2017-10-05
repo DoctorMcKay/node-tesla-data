@@ -88,7 +88,7 @@ g_VehicleStateInterval[VehicleState.Parked] = 30;
 g_VehicleStateInterval[VehicleState.Awoken] = 1;
 g_VehicleStateInterval[VehicleState.ClimateOn] = 1;
 
-var g_BearerToken;
+var g_BearerToken = null;
 var g_BearerTokenExpiresTime = Infinity;
 var g_DB;
 var g_CurrentState = VehicleState.Unknown;
@@ -103,15 +103,30 @@ if (!process.env.ENCRYPTION_KEY) {
 	process.exit(1);
 }
 
-g_DB = MySQL.createConnection(Config.mysql);
-g_DB.connect((err) => {
-	if (err) {
-		throw err;
-	}
+function connectDB(){
+	g_DB = MySQL.createConnection(Config.mysql);
+	g_DB.connect((err) => {
+		if (err) {
+			throw err;
+		}
+
+		log("Connected to MySQL with thread ID " + g_DB.threadId);
+		if(g_BearerToken === null){  //we only want to auth() if we don't already have a token.
+			auth();
+		}
+	});
 	
-	log("Connected to MySQL with thread ID " + g_DB.threadId);
-	auth();
-});
+	g_DB.on('error', function(err) {
+		if(err.code === 'PROTOCOL_CONNECTION_LOST'){
+			log("MySQL Connection Lost - Try to Reconnect");
+			connectDB();
+		}else{
+			throw err;
+		}
+	});
+}
+
+connectDB();
 
 function auth() {
 	log("Decrypting refresh token");

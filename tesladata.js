@@ -103,15 +103,28 @@ if (!process.env.ENCRYPTION_KEY) {
 	process.exit(1);
 }
 
-g_DB = MySQL.createConnection(Config.mysql);
-g_DB.connect((err) => {
-	if (err) {
-		throw err;
-	}
+function connectDB(){
+	g_DB = MySQL.createConnection(Config.mysql);
+	g_DB.connect((err) => {
+		if (err) {
+			throw err;
+		}
+
+		log("Connected to MySQL with thread ID " + g_DB.threadId);
+		auth();
+	});
 	
-	log("Connected to MySQL with thread ID " + g_DB.threadId);
-	auth();
-});
+	g_DB.on('error', function(err) {
+		if(err.code === 'PROTOCOL_CONNECTION_LOST'){
+			log("MySQL Connection Lost - Try to Reconnect");
+			connectDB();
+		}else{
+			throw err;
+		}
+	});
+}
+
+connectDB();
 
 function auth() {
 	log("Decrypting refresh token");

@@ -279,7 +279,7 @@ function enqueueRequest() {
 			setCamperMode(false, "timeout");
 		} else {
 			// Camper mode is on. Set the timeout to 5 minutes, or 1 minute if the last time we turned on HVAC was >= 24 minutes ago
-			timeout = (Date.now() - g_CamperModeLastEnable >= (1000 * 60 * 24)) ? 1 : 5;
+			timeout = Math.min(timeout, (Date.now() - g_CamperModeLastEnable >= (1000 * 60 * 24)) ? 1 : 5);
 			usingCamperMode = true;
 		}
 	}

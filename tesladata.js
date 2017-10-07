@@ -201,6 +201,11 @@ function getData() {
 		var drive = result.drive_state;
 		var vehicle = result.vehicle_state;
 
+		if (g_CamperModeEnabled !== null && drive && drive.shift_state) {
+			log("Disabling camper mode because vehicle is driving");
+			setCamperMode(false, "driving");
+		}
+
 		if (g_CamperModeEnabled !== null && climate && !climate.is_climate_on) {
 			log("Re-enabling climate due to camper mode");
 			setHvacWithRetry(true);
@@ -311,7 +316,9 @@ function setCamperMode(enabled, cause) {
 	} else {
 		g_CamperModeEnabled = null;
 		g_CamperModeLastEnable = null;
-		setHvacWithRetry(false);
+		if (cause != 'driving') {
+			setHvacWithRetry(false);
+		}
 	}
 
 	if (Config.camperModeWebHook) {

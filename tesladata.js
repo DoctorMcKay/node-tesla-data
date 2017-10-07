@@ -1,8 +1,11 @@
 const FS = require('fs');
 const HTTP = require('http');
+const HTTPS = require('https');
 const McCrypto = require('@doctormckay/crypto');
 const MySQL = require('mysql');
+const QueryString = require('querystring');
 const Tesla = require('teslajs');
+const URL = require('url');
 const WS13 = require('websocket13');
 
 const Config = require('./config.json');
@@ -94,6 +97,8 @@ var g_DB;
 var g_CurrentState = VehicleState.Unknown;
 var g_LastState = VehicleState.Unknown;
 var g_LastStateChange = 0;
+var g_CamperModeEnabled = null;
+var g_CamperModeLastEnable = null;
 var g_PollTimer;
 var g_LastPoll = 0;
 var g_DataListenerSockets = [];
@@ -195,6 +200,12 @@ function getData() {
 		var climate = result.climate_state;
 		var drive = result.drive_state;
 		var vehicle = result.vehicle_state;
+
+		if (g_CamperModeEnabled !== null && climate && !climate.is_climate_on) {
+			log("Re-enabling climate due to camper mode");
+			setHvacWithRetry(true);
+			g_CamperModeLastEnable = Date.now();
+		}
 		
 		var climateFlags = flagify(climate, {"is_climate_on": CLIMATE_ON, "smart_preconditioning": CLIMATE_PRECONDITIONING});
 		if (charge.battery_heater_on) {
@@ -249,13 +260,26 @@ function enqueueRequest() {
 
 	let timeout = g_VehicleStateInterval[g_CurrentState];
 	let usingLast = false;
+	let usingCamperMode = false;
 
 	if (Date.now() - g_LastStateChange < 1000 * 60 * 10) {
 		timeout = Math.min(timeout, g_VehicleStateInterval[g_LastState]);
 		usingLast = true;
 	}
 
-	log("Enqueueing next request in " + timeout + " minute(s) due to state " + g_CurrentState + (usingLast ? " (and previous " + g_LastState + ")" : ""));
+	if (g_CamperModeEnabled !== null) {
+		// has camper mode been on for 24 hours?
+		if (Date.now() - g_CamperModeEnabled > (1000 * 60 * 60 * 24)) {
+			// Turn off camper mode due to timeout
+			setCamperMode(false, "timeout");
+		} else {
+			// Camper mode is on. Set the timeout to 5 minutes, or 1 minute if the last time we turned on HVAC was >= 24 minutes ago
+			timeout = (Date.now() - g_CamperModeLastEnable >= (1000 * 60 * 24)) ? 1 : 5;
+			usingCamperMode = true;
+		}
+	}
+
+	log("Enqueueing next request in " + timeout + " minute(s) due to state " + g_CurrentState + (usingCamperMode ? " and in camper mode" : "") + (usingLast ? " (and previous " + g_LastState + ")" : ""));
 	g_PollTimer = setTimeout(getData, 1000 * 60 * timeout);
 }
 
@@ -277,6 +301,64 @@ function getState(response) {
 	}
 
 	return VehicleState.Parked;
+}
+
+function setCamperMode(enabled, cause) {
+	if (enabled) {
+		g_CamperModeEnabled = Date.now();
+		g_CamperModeLastEnable = Date.now();
+		setHvacWithRetry(true);
+	} else {
+		g_CamperModeEnabled = null;
+		g_CamperModeLastEnable = null;
+		setHvacWithRetry(false);
+	}
+
+	if (Config.camperModeWebHook) {
+		let body = QueryString.stringify({
+			"vehicle_id": Config.tesla.vehicleId,
+			"camper_mode_enabled": enabled ? 1 : 0,
+			"cause": cause || null
+		});
+
+		let url = URL.parse(Config.camperModeWebHook);
+		url.method = "POST";
+		url.headers = {
+			"User-Agent": "node/" + process.versions.node + " node-tesla-data/" + require('./package.json').version,
+			"Content-Type": "application/x-www-form-urlencoded",
+			"Content-Length": Buffer.byteLength(body)
+		};
+
+		let req = (url.protocol == 'https:' ? HTTPS : HTTP).request(url, (res) => {
+			log("Response to camper mode webhook: " + res.statusCode);
+			res.on('data', () => {});
+		});
+
+		req.end(body);
+		req.on('error', (err) => {
+			log("Error sending camper mode webhook: " + err.message);
+		});
+	}
+}
+
+function setHvacWithRetry(on, attempt) {
+	attempt = attempt || 1;
+
+	log("Setting climate " + (on ? "on" : "off"));
+	Tesla[on ? 'climateState' : 'climateStop']({"authToken": g_BearerToken, "vehicleID": Config.tesla.vehicleId}, (err) => {
+		if (err) {
+			if (attempt <= 3) {
+				log("Cannot set climate; retrying in 5 seconds: " + err.message);
+				setTimeout(() => {
+					setHvacWithRetry(on, attempt + 1);
+				}, 5000);
+			} else {
+				log("Fatally cannot set climate: " + err.message);
+			}
+		} else {
+			log("Climate " + (on ? "started" : "stopped") + " successfully");
+		}
+	});
 }
 
 function flagify(obj, flags) {
@@ -304,6 +386,22 @@ var webServer = HTTP.createServer((req, res) => {
 		g_CurrentState = VehicleState.Awoken;
 		g_LastStateChange = Date.now();
 		getData();
+
+		req.on('data', () => {});
+		res.statusCode = 204;
+		res.statusMessage = "No Content";
+		res.end();
+	} else if (req.method == 'POST' && req.url == '/camper_mode_on') {
+		setCamperMode(true, "user_input");
+		log("Setting camper mode on by HTTP interface");
+
+		req.on('data', () => {});
+		res.statusCode = 204;
+		res.statusMessage = "No Content";
+		res.end();
+	} else if (req.method == 'POST' && req.url == '/camper_mode_off') {
+		setCamperMode(false, "user_input");
+		log("Setting camper mode off by HTTP interface");
 
 		req.on('data', () => {});
 		res.statusCode = 204;

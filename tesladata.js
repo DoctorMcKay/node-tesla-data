@@ -352,7 +352,7 @@ function setHvacWithRetry(on, attempt) {
 	attempt = attempt || 1;
 
 	log("Setting climate " + (on ? "on" : "off"));
-	Tesla[on ? 'climateState' : 'climateStop']({"authToken": g_BearerToken, "vehicleID": Config.tesla.vehicleId}, (err) => {
+	Tesla[on ? 'climateStart' : 'climateStop']({"authToken": g_BearerToken, "vehicleID": Config.tesla.vehicleId}, (err) => {
 		if (err) {
 			if (attempt <= 3) {
 				log("Cannot set climate; retrying in 5 seconds: " + err.message);

@@ -278,8 +278,25 @@ function enqueueRequest() {
 			// Turn off camper mode due to timeout
 			setCamperMode(false, "timeout");
 		} else {
-			// Camper mode is on. Set the timeout to 5 minutes, or 1 minute if the last time we turned on HVAC was >= 24 minutes ago
-			timeout = Math.min(timeout, (Date.now() - g_CamperModeLastEnable >= (1000 * 60 * 24)) ? 1 : 5);
+			// Make a list of states that require a one-minute poll, except ClimateOn
+			let oneMinuteStates = [];
+			for (let state in g_VehicleStateInterval) {
+				if (g_VehicleStateInterval.hasOwnProperty(state) && g_VehicleStateInterval[state] == 1 && state != VehicleState.ClimateOn) {
+					oneMinuteStates.push(state);
+				}
+			}
+
+			// Poll in 1 minute if the last time we turned on HVAC was >= 24 minutes ago, otherwise in 5 minutes
+			let camperModeTimeout = (Date.now() - g_CamperModeLastEnable >= (1000 * 60 * 24)) ? 1 : 5;
+
+			if (oneMinuteStates.includes(g_CurrentState) || (usingLast && oneMinuteStates.includes(g_LastState))) {
+				// We want to use the lower of the state-based timeout and the camper mode timeout as long as the
+				// state-based timeout isn't a result of the state being ClimateOn
+				timeout = Math.min(timeout, camperModeTimeout);
+			} else {
+				timeout = camperModeTimeout;
+			}
+
 			usingCamperMode = true;
 		}
 	}
@@ -346,6 +363,8 @@ function setCamperMode(enabled, cause) {
 			log("Error sending camper mode webhook: " + err.message);
 		});
 	}
+
+	getData();
 }
 
 function setHvacWithRetry(on, attempt) {

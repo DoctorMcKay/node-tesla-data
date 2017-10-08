@@ -282,7 +282,7 @@ function enqueueRequest() {
 			let oneMinuteStates = [];
 			for (let state in g_VehicleStateInterval) {
 				if (g_VehicleStateInterval.hasOwnProperty(state) && g_VehicleStateInterval[state] == 1 && state != VehicleState.ClimateOn) {
-					oneMinuteStates.push(state);
+					oneMinuteStates.push(parseInt(state, 10));
 				}
 			}
 

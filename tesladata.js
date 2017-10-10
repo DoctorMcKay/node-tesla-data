@@ -201,7 +201,7 @@ function getData() {
 		var drive = result.drive_state;
 		var vehicle = result.vehicle_state;
 
-		if (g_CamperModeEnabled !== null && drive && drive.shift_state) {
+		if (g_CamperModeEnabled !== null && drive && drive.shift_state && drive.shift_state != 'P') {
 			log("Disabling camper mode because vehicle is driving");
 			setCamperMode(false, "driving");
 		}

@@ -71,16 +71,6 @@ state should change.
 
 Response is 204 No Content.
 
-### POST /camper_mode_on
-
-Turns on "camper mode", which forces the application to turn on HVAC, and re-enable it every time it sees that it's
-disabled (for 24 hours, or until you disable camper mode). Unlike the standard "camper mode", this allows you to have
-the HVAC on while the vehicle is charging.
-
-### POST /camper_mode_off
-
-Turns off "camper mode".
-
 ### POST /command/[command]
 
 Execute a command on the car. Available commands are:

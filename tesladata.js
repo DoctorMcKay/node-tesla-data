@@ -279,12 +279,6 @@ function checkForVehicleWakeUp() {
 					return;
 				}
 
-				if (result.state != 'online') {
-					log("Car state is now " + result.state + ", not expected \"online\" following wakeup call");
-					enqueueRequest();
-					return;
-				}
-
 				// we did it!
 				g_CarLastAwoken = Date.now();
 				getData();

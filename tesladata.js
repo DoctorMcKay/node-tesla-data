@@ -178,7 +178,7 @@ function getData() {
 	Tesla.vehicleData(options, function(err, result) {
 		if (err) {
 			log("Can't get vehicle data: " + (err.message || err));
-			if (err.message == "Error response: 408") {
+			if ((err.message || err) == "Error response: 408") {
 				checkForVehicleWakeUp();
 				return;
 			}
@@ -302,7 +302,7 @@ function enqueueRequest() {
 	let timeout = g_VehicleStateInterval[g_CurrentState];
 	let usingLast = false;
 
-	if (Date.now() - g_LastStateChange < 1000 * 60 * 10) {
+	if (g_CurrentState != VehicleState.Asleep && Date.now() - g_LastStateChange < 1000 * 60 * 10) {
 		timeout = Math.min(timeout, g_VehicleStateInterval[g_LastState]);
 		usingLast = true;
 	}

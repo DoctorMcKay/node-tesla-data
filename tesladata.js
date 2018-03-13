@@ -281,7 +281,7 @@ function checkForVehicleWakeUp() {
 
 				// we did it!
 				g_CarLastAwoken = Date.now();
-				getData();
+				setTimeout(getData, 10000);
 			});
 		} else {
 			log("Car is " + car.state + " following data pull fail");

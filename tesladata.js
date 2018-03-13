@@ -29,7 +29,8 @@ const VehicleState = {
 	"Driving": 3,
 	"Parked": 4,
 	"Awoken": 5,
-	"ClimateOn": 6
+	"ClimateOn": 6,
+	"Asleep": 7             // "Always Connected" setting OFF
 };
 
 const g_VehicleCommands = {
@@ -87,6 +88,7 @@ g_VehicleStateInterval[VehicleState.Driving] = 1;
 g_VehicleStateInterval[VehicleState.Parked] = 30;
 g_VehicleStateInterval[VehicleState.Awoken] = 1;
 g_VehicleStateInterval[VehicleState.ClimateOn] = 1;
+g_VehicleStateInterval[VehicleState.Asleep] = 60 * 6; // 6 hours
 
 var g_BearerToken = null;
 var g_BearerTokenExpiresTime = Infinity;
@@ -97,6 +99,7 @@ var g_LastStateChange = 0;
 var g_PollTimer;
 var g_LastPoll = 0;
 var g_DataListenerSockets = [];
+var g_CarLastAwoken = 0;
 
 if (!process.env.ENCRYPTION_KEY) {
 	log("Encryption key needed");
@@ -116,11 +119,11 @@ function connectDB(){
 		}
 	});
 	
-	g_DB.on('error', function(err) {
-		if(err.code === 'PROTOCOL_CONNECTION_LOST'){
+	g_DB.on('error', (err) => {
+		if (err.code === 'PROTOCOL_CONNECTION_LOST') {
 			log("MySQL Connection Lost - Try to Reconnect");
 			connectDB();
-		}else{
+		} else {
 			throw err;
 		}
 	});
@@ -175,9 +178,16 @@ function getData() {
 	Tesla.vehicleData(options, function(err, result) {
 		if (err) {
 			log("Can't get vehicle data: " + (err.message || err));
+			if (err.message == "Error response: 408") {
+				checkForVehicleWakeUp();
+				return;
+			}
+
 			enqueueRequest();
 			return;
 		}
+
+		g_LastPoll = Date.now();
 
 		g_DataListenerSockets.forEach((socket) => {
 			socket.send(JSON.stringify({"type": "vehicle_update", "data": result}));
@@ -244,6 +254,48 @@ function getData() {
 	});
 }
 
+function checkForVehicleWakeUp() {
+	Tesla.allVehicles({"authToken": g_BearerToken}, (err, vehicles) => {
+		if (err) {
+			log("Cannot get vehicles list: " + err.message);
+			enqueueRequest();
+			return;
+		}
+
+		let car = vehicles.filter(vehicle => vehicle.id_s == Config.tesla.vehicleId);
+		if (!car.length) {
+			log("Car " + Config.tesla.vehicleId + " not found in vehicles list");
+			enqueueRequest();
+			return;
+		}
+
+		car = car[0];
+		if (car.state == 'asleep') {
+			log("Car is asleep, waking");
+			Tesla.wakeUp({"authToken": g_BearerToken, "vehicleID": Config.tesla.vehicleId}, (err, result) => {
+				if (err) {
+					log("Cannot wake car: " + err.message);
+					enqueueRequest();
+					return;
+				}
+
+				if (result.state != 'online') {
+					log("Car state is now " + result.state + ", not expected \"online\" following wakeup call");
+					enqueueRequest();
+					return;
+				}
+
+				// we did it!
+				g_CarLastAwoken = Date.now();
+				getData();
+			});
+		} else {
+			log("Car is " + car.state + " following data pull fail");
+			enqueueRequest();
+		}
+	});
+}
+
 function enqueueRequest() {
 	clearTimeout(g_PollTimer);
 
@@ -274,6 +326,11 @@ function getState(response) {
 
 	if (response.climate_state && response.climate_state.is_climate_on) {
 		return VehicleState.ClimateOn;
+	}
+
+	// did we wake it up in the past half hour?
+	if (Date.now() - g_CarLastAwoken < (1000 * 60 * 30)) {
+		return VehicleState.Asleep;
 	}
 
 	return VehicleState.Parked;

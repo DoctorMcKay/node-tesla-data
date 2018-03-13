@@ -255,6 +255,12 @@ function getData() {
 }
 
 function checkForVehicleWakeUp() {
+	if (Date.now() - g_CarLastAwoken < 30000) {
+		// we last tried this under 30 seconds ago
+		enqueueRequest(true);
+		return;
+	}
+
 	Tesla.allVehicles({"authToken": g_BearerToken}, (err, vehicles) => {
 		if (err) {
 			log("Cannot get vehicles list: " + err.message);
@@ -290,7 +296,7 @@ function checkForVehicleWakeUp() {
 	});
 }
 
-function enqueueRequest() {
+function enqueueRequest(followingError) {
 	clearTimeout(g_PollTimer);
 
 	let timeout = g_VehicleStateInterval[g_CurrentState];
@@ -299,6 +305,10 @@ function enqueueRequest() {
 	if (g_CurrentState != VehicleState.Asleep && Date.now() - g_LastStateChange < 1000 * 60 * 10) {
 		timeout = Math.min(timeout, g_VehicleStateInterval[g_LastState]);
 		usingLast = true;
+	}
+
+	if (followingError) {
+		timeout = 1; // 1 minute
 	}
 
 	log("Enqueueing next request in " + timeout + " minute(s) due to state " + g_CurrentState + (usingLast ? " (and previous " + g_LastState + ")" : ""));

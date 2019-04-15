@@ -107,10 +107,13 @@ if (!process.env.ENCRYPTION_KEY) {
 }
 
 function connectDB(){
+	console.log('Connecting to MySQL...');
 	g_DB = MySQL.createConnection(Config.mysql);
 	g_DB.connect((err) => {
 		if (err) {
-			throw err;
+			console.log('Error connecting to MySQL: ' + err.message);
+			setTimeout(connectDB, 5000);
+			return;
 		}
 
 		log("Connected to MySQL with thread ID " + g_DB.threadId);
@@ -118,11 +121,11 @@ function connectDB(){
 			auth();
 		}
 	});
-	
+
 	g_DB.on('error', (err) => {
 		if (err.code === 'PROTOCOL_CONNECTION_LOST') {
-			log("MySQL Connection Lost - Try to Reconnect");
-			connectDB();
+			log("MySQL connection lost. Attempting to reconnect...");
+			setTimeout(connectDB, 5000);
 		} else {
 			throw err;
 		}
@@ -134,24 +137,24 @@ connectDB();
 function auth() {
 	log("Decrypting refresh token");
 	var refreshToken = McCrypto.decrypt(process.env.ENCRYPTION_KEY, new Buffer(Config.tesla.encryptedToken, 'base64'));
-	
+
 	log("Obtaining new bearer token...");
 	Tesla.refreshToken(refreshToken, (err, res) => {
 		if (err) {
 			throw err;
 		}
-		
+
 		var body = JSON.parse(res.body);
-		
+
 		if (!body || !body.access_token || !body.refresh_token || !body.expires_in) {
 			throw new Error("Got malformed response");
 		}
-		
+
 		log("Got new refresh token " + body.refresh_token.substring(0, 6) + "...");
 		g_BearerToken = body.access_token;
 		Config.tesla.encryptedToken = McCrypto.encrypt(McCrypto.Cipher.AES256CTRWithHMAC, process.env.ENCRYPTION_KEY, body.refresh_token).toString('base64');
 		FS.writeFileSync(__dirname + '/config.json', JSON.stringify(Config, undefined, "\t"));
-		
+
 		g_BearerTokenExpiresTime = Date.now() + (1000 * (body.expires_in - (60 * 60)));
 		getData();
 	});
@@ -171,10 +174,10 @@ function getData() {
 		enqueueRequest();
 		return;
 	}
-	
+
 	log("Requesting data");
 	var options = {"authToken": g_BearerToken, "vehicleID": Config.tesla.vehicleId};
-	
+
 	Tesla.vehicleData(options, function(err, result) {
 		if (err) {
 			log("Can't get vehicle data: " + (err.message || err));
@@ -200,17 +203,17 @@ function getData() {
 			g_CurrentState = state;
 			g_LastStateChange = Date.now();
 		}
-		
+
 		var charge = result.charge_state;
 		var climate = result.climate_state;
 		var drive = result.drive_state;
 		var vehicle = result.vehicle_state;
-		
+
 		var climateFlags = flagify(climate, {"is_climate_on": CLIMATE_ON, "smart_preconditioning": CLIMATE_PRECONDITIONING});
 		if (charge.battery_heater_on) {
 			climateFlags |= CLIMATE_BATTERY_HEATER;
 		}
-		
+
 		var doorFlags = flagify(vehicle, {"df": DOOR_DRIVER, "pf": DOOR_PASSENGER, "dr": DOOR_REAR_LEFT, "pr": DOOR_REAR_RIGHT, "ft": DOOR_FRUNK, "rt": DOOR_LIFTGATE, "locked": DOOR_LOCKED});
 		if (vehicle.sun_roof_percent_open > 0) {
 			doorFlags |= DOOR_SUNROOF;
@@ -220,7 +223,7 @@ function getData() {
 		if (chargeState === null) {
 			chargeState = charge.charge_port_door_open ? 'Complete' : 'Disconnected';
 		}
-		
+
 		var cols = {
 			"timestamp": Math.floor(Date.now() / 1000),
 			"charging_state": chargeState,
@@ -242,12 +245,12 @@ function getData() {
 			"drive_state": JSON.stringify(drive),
 			"vehicle_state": JSON.stringify(vehicle)
 		};
-		
+
 		g_DB.query("INSERT INTO `tesla_data` SET ?", [cols], (err) => {
 			if (err) {
 				throw err;
 			}
-			
+
 			log("Recorded data in database at time " + cols.timestamp);
 			enqueueRequest();
 		});
@@ -342,13 +345,13 @@ function getState(response) {
 
 function flagify(obj, flags) {
 	var out = 0;
-	
+
 	for (var flag in flags) {
 		if (flags.hasOwnProperty(flag) && obj.hasOwnProperty(flag) && obj[flag]) {
 			out |= flags[flag];
 		}
 	}
-	
+
 	return out;
 }
 
@@ -412,7 +415,7 @@ wsServer.on('handshake', (handshakeData, reject, accept) => {
 		reject(400, "No email or WebSocket password configured");
 		return;
 	}
-	
+
 	if (handshakeData.query.password != Config.tesla.websocketPassword) {
 		reject(403, "Incorrect password");
 		return;

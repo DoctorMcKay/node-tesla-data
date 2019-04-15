@@ -107,11 +107,11 @@ if (!process.env.ENCRYPTION_KEY) {
 }
 
 function connectDB(){
-	console.log('Connecting to MySQL...');
+	log('Connecting to MySQL...');
 	g_DB = MySQL.createConnection(Config.mysql);
 	g_DB.connect((err) => {
 		if (err) {
-			console.log('Error connecting to MySQL: ' + err.message);
+			log('Error connecting to MySQL: ' + err.message);
 			setTimeout(connectDB, 5000);
 			return;
 		}

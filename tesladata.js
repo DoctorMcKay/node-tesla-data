@@ -251,13 +251,13 @@ function getData() {
 		g_DB.query("INSERT INTO `tesla_data` SET ?", [cols], (err) => {
 			if (err) {
 				if (err.message.match(/Unknown column 'vehicle_config'/)) {
+					// We use varchar here because it's less likely to fail and this is going to be an unattended alter
 					g_DB.query("ALTER TABLE `tesla_data` ADD COLUMN `vehicle_config` VARCHAR(5000) NOT NULL DEFAULT '{}' AFTER `vehicle_state`", (err) => {
 						if (err) {
 							throw err;
 						}
 					});
 				}
-
 				throw err;
 			}
 

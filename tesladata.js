@@ -208,6 +208,7 @@ function getData() {
 		var climate = result.climate_state;
 		var drive = result.drive_state;
 		var vehicle = result.vehicle_state;
+		var config = result.vehicle_config;
 
 		var climateFlags = flagify(climate, {"is_climate_on": CLIMATE_ON, "smart_preconditioning": CLIMATE_PRECONDITIONING});
 		if (charge.battery_heater_on) {
@@ -243,11 +244,20 @@ function getData() {
 			"charge_state": JSON.stringify(charge),
 			"climate_state": JSON.stringify(climate),
 			"drive_state": JSON.stringify(drive),
-			"vehicle_state": JSON.stringify(vehicle)
+			"vehicle_state": JSON.stringify(vehicle),
+			"vehicle_config": JSON.stringify(config)
 		};
 
 		g_DB.query("INSERT INTO `tesla_data` SET ?", [cols], (err) => {
 			if (err) {
+				if (err.message.match(/Unknown column 'vehicle_config'/)) {
+					g_DB.query("ALTER TABLE `tesla_data` ADD COLUMN `vehicle_config` VARCHAR(5000) NOT NULL DEFAULT '{}' AFTER `vehicle_state`", (err) => {
+						if (err) {
+							throw err;
+						}
+					});
+				}
+
 				throw err;
 			}
 

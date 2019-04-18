@@ -16,9 +16,10 @@ CREATE TABLE `tesla_data` (
 	`gps_as_of` INT(10) UNSIGNED NULL DEFAULT NULL,
 	`door_flags` TINYINT(3) UNSIGNED NOT NULL,
 	`odometer` FLOAT(12,6) NULL DEFAULT NULL,
-	`charge_state` VARCHAR(5000) NOT NULL,
-	`climate_state` VARCHAR(5000) NOT NULL,
-	`drive_state` VARCHAR(5000) NOT NULL,
-	`vehicle_state` VARCHAR(5000) NOT NULL,
+	`charge_state` JSON NOT NULL,
+	`climate_state` JSON NOT NULL,
+	`drive_state` JSON NOT NULL,
+	`vehicle_state` JSON NOT NULL,
+	`vehicle_config` JSON NOT NULL,
 	PRIMARY KEY (`timestamp`)
 ) COLLATE='latin1_swedish_ci' ENGINE=InnoDB ROW_FORMAT=COMPRESSED;

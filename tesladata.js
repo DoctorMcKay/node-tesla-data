@@ -283,7 +283,7 @@ function checkForVehicleWakeUp() {
 		return;
 	}
 
-	Tesla.allVehicles({"authToken": g_BearerToken}, (err, vehicles) => {
+	Tesla.vehicles({"authToken": g_BearerToken}, (err, vehicles) => {
 		if (err) {
 			log("Cannot get vehicles list: " + err.message);
 			enqueueRequest();
@@ -470,7 +470,7 @@ wsServer.on('handshake', (handshakeData, reject, accept) => {
 
 	let vehicleId = match[1];
 	// Get the vehicle tokens
-	Tesla.allVehicles({"authToken": g_BearerToken}, (err, vehicles) => {
+	Tesla.vehicles({"authToken": g_BearerToken}, (err, vehicles) => {
 		if (err) {
 			log("Cannot retrieve vehicle list: " + err.message);
 			reject(502, "Cannot get vehicle list");
@@ -542,7 +542,7 @@ wsServer.on('handshake', (handshakeData, reject, accept) => {
 
 function triggerHomeLink(callback) {
 	// This is a bit more involved than it really needs to be
-	Tesla.allVehicles({"authToken": g_BearerToken}, (err, vehicles) => {
+	Tesla.vehicles({"authToken": g_BearerToken}, (err, vehicles) => {
 		if (err) {
 			callback(err);
 			return;

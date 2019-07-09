@@ -24,7 +24,7 @@ iface.question("MyTesla Email: ", (email) => {
 				FS.writeFileSync(__dirname + "/config.json", JSON.stringify(Config, undefined, "\t"));
 				console.log("Authenticated successfully. Refresh token has been encrypted and saved to config.json");
 
-				TeslaJS.allVehicles({"authToken": results.authToken}, (err, vehicles) => {
+				TeslaJS.vehicles({"authToken": results.authToken}, (err, vehicles) => {
 					if (err) {
 						process.stderr.write("Cannot retrieve list of vehicles: " + err.message + "\n");
 						process.exit(4);

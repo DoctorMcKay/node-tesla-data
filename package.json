@@ -7,7 +7,7 @@
 	"dependencies": {
 		"@doctormckay/crypto": "^1.2.0",
 		"mysql": "^2.17.1",
-		"teslajs": "^2.1.49",
+		"teslajs": "^4.3.11",
 		"websocket13": "^1.7.5"
 	},
 	"engines": {

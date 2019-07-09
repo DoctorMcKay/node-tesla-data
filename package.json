@@ -5,10 +5,10 @@
 	"author": "Alexander Corn <mckay@doctormckay.com>",
 	"license": "GPLv3",
 	"dependencies": {
-		"@doctormckay/crypto": "^1.1.0",
-		"mysql": "^2.13.0",
-		"teslajs": "^2.1.28",
-		"websocket13": "^1.6.2"
+		"@doctormckay/crypto": "^1.2.0",
+		"mysql": "^2.17.1",
+		"teslajs": "^2.1.49",
+		"websocket13": "^1.7.5"
 	},
 	"engines": {
 		"node": ">=6.0.0"

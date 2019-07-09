@@ -92,7 +92,7 @@ g_VehicleStateInterval[VehicleState.Asleep] = 60 * 6; // 6 hours
 
 var g_BearerToken = null;
 var g_BearerTokenExpiresTime = Infinity;
-var g_DB;
+var g_DB = null;
 var g_CurrentState = VehicleState.Unknown;
 var g_LastState = VehicleState.Unknown;
 var g_LastStateChange = 0;
@@ -108,28 +108,34 @@ if (!process.env.ENCRYPTION_KEY) {
 
 function connectDB(){
 	log('Connecting to MySQL...');
-	g_DB = MySQL.createConnection(Config.mysql);
-	g_DB.connect((err) => {
-		if (err) {
-			log('Error connecting to MySQL: ' + err.message);
-			setTimeout(connectDB, 5000);
-			return;
-		}
+	if (Config.mysql === null) {
+		// Development mode, no MySQL connection
+		log("Skipping MySQL connection");
+		auth();
+	} else {
+		g_DB = MySQL.createConnection(Config.mysql);
+		g_DB.connect((err) => {
+			if (err) {
+				log('Error connecting to MySQL: ' + err.message);
+				setTimeout(connectDB, 5000);
+				return;
+			}
 
-		log("Connected to MySQL with thread ID " + g_DB.threadId);
-		if(g_BearerToken === null){  //we only want to auth() if we don't already have a token.
-			auth();
-		}
-	});
+			log("Connected to MySQL with thread ID " + g_DB.threadId);
+			if (g_BearerToken === null) {  //we only want to auth() if we don't already have a token.
+				auth();
+			}
+		});
 
-	g_DB.on('error', (err) => {
-		if (err.code === 'PROTOCOL_CONNECTION_LOST') {
-			log("MySQL connection lost. Attempting to reconnect...");
-			setTimeout(connectDB, 5000);
-		} else {
-			throw err;
-		}
-	});
+		g_DB.on('error', (err) => {
+			if (err.code === 'PROTOCOL_CONNECTION_LOST') {
+				log("MySQL connection lost. Attempting to reconnect...");
+				setTimeout(connectDB, 5000);
+			} else {
+				throw err;
+			}
+		});
+	}
 }
 
 connectDB();
@@ -248,23 +254,25 @@ function getData() {
 			"vehicle_config": JSON.stringify(config)
 		};
 
-		let tableName = Config.mysql.table || 'tesla_data';
-		g_DB.query("INSERT INTO `" + tableName + "` SET ?", [cols], (err) => {
-			if (err) {
-				if (err.message.match(/Unknown column 'vehicle_config'/)) {
-					// We use varchar here because it's less likely to fail and this is going to be an unattended alter
-					g_DB.query("ALTER TABLE `" + tableName + "` ADD COLUMN `vehicle_config` VARCHAR(5000) NOT NULL DEFAULT '{}' AFTER `vehicle_state`", (err) => {
-						if (err) {
-							throw err;
-						}
-					});
+		if (g_DB) {
+			let tableName = Config.mysql.table || 'tesla_data';
+			g_DB.query("INSERT INTO `" + tableName + "` SET ?", [cols], (err) => {
+				if (err) {
+					if (err.message.match(/Unknown column 'vehicle_config'/)) {
+						// We use varchar here because it's less likely to fail and this is going to be an unattended alter
+						g_DB.query("ALTER TABLE `" + tableName + "` ADD COLUMN `vehicle_config` VARCHAR(5000) NOT NULL DEFAULT '{}' AFTER `vehicle_state`", (err) => {
+							if (err) {
+								throw err;
+							}
+						});
+					}
+					throw err;
 				}
-				throw err;
-			}
 
-			log("Recorded data in database at time " + cols.timestamp);
-			enqueueRequest();
-		});
+				log("Recorded data in database at time " + cols.timestamp);
+				enqueueRequest();
+			});
+		}
 	});
 }
 

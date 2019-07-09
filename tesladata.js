@@ -30,7 +30,7 @@ const VehicleState = {
 	"Parked": 4,
 	"Awoken": 5,
 	"ClimateOn": 6,
-	"Asleep": 7             // "Always Connected" setting OFF
+	"Asleep": 7             // "Always Connected" setting OFF (or MCU2)
 };
 
 const g_VehicleCommands = {
@@ -88,7 +88,7 @@ g_VehicleStateInterval[VehicleState.Driving] = 1;
 g_VehicleStateInterval[VehicleState.Parked] = 30;
 g_VehicleStateInterval[VehicleState.Awoken] = 1;
 g_VehicleStateInterval[VehicleState.ClimateOn] = 1;
-g_VehicleStateInterval[VehicleState.Asleep] = 60 * 6; // 6 hours
+g_VehicleStateInterval[VehicleState.Asleep] = 10;
 
 let g_BearerToken = null;
 let g_BearerTokenExpiresTime = Infinity;
@@ -99,7 +99,7 @@ let g_LastStateChange = 0;
 let g_PollTimer;
 let g_LastPoll = 0;
 let g_DataListenerSockets = [];
-let g_CarLastAwoken = 0;
+let g_CarLastSeenAwake = 0;
 
 if (!process.env.ENCRYPTION_KEY) {
 	log("Encryption key needed");
@@ -166,7 +166,7 @@ function auth() {
 	});
 }
 
-function getData() {
+async function getData() {
 	clearTimeout(g_PollTimer);
 
 	if (g_BearerTokenExpiresTime <= Date.now()) {
@@ -176,7 +176,7 @@ function getData() {
 	}
 
 	if (Date.now() - g_LastPoll < 10000) {
-		// last poll was <10 seconds ago
+		// last poll was under 10 seconds ago
 		enqueueRequest();
 		return;
 	}
@@ -184,31 +184,38 @@ function getData() {
 	log("Requesting data");
 	let options = {"authToken": g_BearerToken, "vehicleID": Config.tesla.vehicleId};
 
-	Tesla.vehicleData(options, function(err, result) {
-		if (err) {
-			log("Can't get vehicle data: " + (err.message || err));
-			if ((err.message || err) == "Error response: 408") {
-				checkForVehicleWakeUp();
-				return;
-			}
-
-			enqueueRequest();
+	try {
+		let vehicleMetadata = (await Tesla.vehiclesAsync(options)).find(v => (v.id_s || v.id) == Config.tesla.vehicleId);
+		if (!vehicleMetadata) {
+			log("Unable to retrieve metadata for vehicle: vehicle not found");
 			return;
 		}
 
-		g_LastPoll = Date.now();
+		if (vehicleMetadata.state == 'asleep') {
+			// Car is asleep
+			log('Vehicle is asleep');
+			setState(VehicleState.Asleep);
+
+			if (g_CurrentState != VehicleState.Awoken && Date.now() - g_CarLastSeenAwake < (1000 * 60 * 60 * 3)) {
+				// Only wake it up to poll data every 3 hours
+				g_LastPoll = Date.now();
+				return;
+			}
+
+			// We need to wake up the car
+			await Tesla.wakeUpAsync(options);
+			// If we get this far, it worked
+		}
+
+		let result = await Tesla.vehicleDataAsync(options);
+		g_LastPoll = g_CarLastSeenAwake = Date.now();
 
 		g_DataListenerSockets.forEach((socket) => {
 			socket.send(JSON.stringify({"type": "vehicle_update", "data": result}));
 		});
 
 		let state = getState(result);
-		if (state != g_CurrentState) {
-			log("State is now " + state + " (was " + g_CurrentState + ")");
-			g_LastState = g_CurrentState;
-			g_CurrentState = state;
-			g_LastStateChange = Date.now();
-		}
+		setState(state);
 
 		let charge = result.charge_state;
 		let climate = result.climate_state;
@@ -216,12 +223,23 @@ function getData() {
 		let vehicle = result.vehicle_state;
 		let config = result.vehicle_config;
 
-		let climateFlags = flagify(climate, {"is_climate_on": CLIMATE_ON, "smart_preconditioning": CLIMATE_PRECONDITIONING});
+		let climateFlags = flagify(climate, {
+			"is_climate_on": CLIMATE_ON,
+			"smart_preconditioning": CLIMATE_PRECONDITIONING
+		});
 		if (charge.battery_heater_on) {
 			climateFlags |= CLIMATE_BATTERY_HEATER;
 		}
 
-		let doorFlags = flagify(vehicle, {"df": DOOR_DRIVER, "pf": DOOR_PASSENGER, "dr": DOOR_REAR_LEFT, "pr": DOOR_REAR_RIGHT, "ft": DOOR_FRUNK, "rt": DOOR_LIFTGATE, "locked": DOOR_LOCKED});
+		let doorFlags = flagify(vehicle, {
+			"df": DOOR_DRIVER,
+			"pf": DOOR_PASSENGER,
+			"dr": DOOR_REAR_LEFT,
+			"pr": DOOR_REAR_RIGHT,
+			"ft": DOOR_FRUNK,
+			"rt": DOOR_LIFTGATE,
+			"locked": DOOR_LOCKED
+		});
 		if (vehicle.sun_roof_percent_open > 0) {
 			doorFlags |= DOOR_SUNROOF;
 		}
@@ -270,52 +288,14 @@ function getData() {
 				}
 
 				log("Recorded data in database at time " + cols.timestamp);
-				enqueueRequest();
 			});
 		}
-	});
-}
 
-function checkForVehicleWakeUp() {
-	if (Date.now() - g_CarLastAwoken < 30000) {
-		// we last tried this under 30 seconds ago
-		enqueueRequest(true);
-		return;
+		enqueueRequest();
+	} catch (err) {
+		log("Can't get vehicle data: " + (err.message || err));
+		enqueueRequest();
 	}
-
-	Tesla.vehicles({"authToken": g_BearerToken}, (err, vehicles) => {
-		if (err) {
-			log("Cannot get vehicles list: " + err.message);
-			enqueueRequest();
-			return;
-		}
-
-		let car = vehicles.filter(vehicle => vehicle.id_s == Config.tesla.vehicleId);
-		if (!car.length) {
-			log("Car " + Config.tesla.vehicleId + " not found in vehicles list");
-			enqueueRequest();
-			return;
-		}
-
-		car = car[0];
-		if (car.state == 'asleep') {
-			log("Car is asleep, waking");
-			Tesla.wakeUp({"authToken": g_BearerToken, "vehicleID": Config.tesla.vehicleId}, (err, result) => {
-				if (err) {
-					log("Cannot wake car: " + err.message);
-					enqueueRequest();
-					return;
-				}
-
-				// we did it!
-				g_CarLastAwoken = Date.now();
-				setTimeout(getData, 10000);
-			});
-		} else {
-			log("Car is " + car.state + " following data pull fail");
-			enqueueRequest();
-		}
-	});
 }
 
 function enqueueRequest(followingError) {
@@ -333,7 +313,7 @@ function enqueueRequest(followingError) {
 		timeout = 1; // 1 minute
 	}
 
-	log("Enqueueing next request in " + timeout + " minute(s) due to state " + g_CurrentState + (usingLast ? " (and previous " + g_LastState + ")" : ""));
+	log("Enqueueing next request in " + timeout + " minute(s) due to state " + getStateName(g_CurrentState) + (usingLast ? " (and previous " + getStateName(g_LastState) + ")" : ""));
 	g_PollTimer = setTimeout(getData, 1000 * 60 * timeout);
 }
 
@@ -354,12 +334,26 @@ function getState(response) {
 		return VehicleState.ClimateOn;
 	}
 
-	// did we wake it up in the past half hour?
-	if (Date.now() - g_CarLastAwoken < (1000 * 60 * 30)) {
-		return VehicleState.Asleep;
+	return VehicleState.Parked;
+}
+
+function setState(state) {
+	if (state != g_CurrentState) {
+		log("State is now " + getStateName(state) + " (was " + getStateName(g_CurrentState) + ")");
+		g_LastState = g_CurrentState;
+		g_CurrentState = state;
+		g_LastStateChange = Date.now();
+	}
+}
+
+function getStateName(state) {
+	for (let i in VehicleState) {
+		if (VehicleState[i] == state) {
+			return i;
+		}
 	}
 
-	return VehicleState.Parked;
+	return state;
 }
 
 function flagify(obj, flags) {
@@ -375,7 +369,7 @@ function flagify(obj, flags) {
 }
 
 // Set up the HTTP server
-let webServer = HTTP.createServer((req, res) => {
+let webServer = HTTP.createServer(async (req, res) => {
 	if (req.method == 'GET' && req.url == '/vehicle_state') {
 		req.on('data', () => {});
 		res.setHeader("Content-Type", "application/json; charset=UTF-8");
@@ -383,9 +377,7 @@ let webServer = HTTP.createServer((req, res) => {
 	} else if (req.method == 'POST' && req.url == '/awake') {
 		log("Awoken from external input");
 
-		g_LastState = g_CurrentState;
-		g_CurrentState = VehicleState.Awoken;
-		g_LastStateChange = Date.now();
+		setState(VehicleState.Awoken);
 		getData();
 
 		req.on('data', () => {});
@@ -395,6 +387,12 @@ let webServer = HTTP.createServer((req, res) => {
 	} else if (req.method == 'POST' && req.url.match(/^\/command\/[a-z_]+$/) && g_VehicleCommands[req.url.substring(9)]) {
 		let command = req.url.substring(9);
 		log("Received command " + command);
+
+		if (command != 'trigger_homelink' && Date.now() - g_CarLastSeenAwake > (1000 * 60 * 5)) {
+			// Try to wake up the car first if we last saw it awake more than 5 minutes ago
+			// If it's "trigger_homelink", the wake-up will be performed as part of the normal routine
+			await Tesla.wakeUpAsync({"vehicleID": Config.tesla.vehicleId});
+		}
 
 		res.setHeader("Content-Type", "application/json; charset=UTF-8");
 		g_VehicleCommands[command]((err) => {
@@ -540,43 +538,35 @@ wsServer.on('handshake', (handshakeData, reject, accept) => {
 	});
 });
 
-function triggerHomeLink(callback) {
+async function triggerHomeLink(callback) {
 	// This is a bit more involved than it really needs to be
-	Tesla.vehicles({"authToken": g_BearerToken}, (err, vehicles) => {
-		if (err) {
-			callback(err);
-			return;
+	try {
+		let options = {"authToken": g_BearerToken, "vehicleID": Config.tesla.vehicleId};
+
+		// Retrieve vehicle metadata first to determine if we need to wake it up, and for tokens
+		let vehicle = (await Tesla.vehiclesAsync(options)).find(v => v.id_s == Config.tesla.vehicleId);
+		if (!vehicle) {
+			return callback(new Error("Cannot find vehicle"));
 		}
 
-		let vehicle = vehicles.filter(vehicle => vehicle.id_s == Config.tesla.vehicleId);
-		if (vehicle.length != 1) {
-			callback(new Error("Cannot find vehicle"));
-			return;
+		if (!vehicle.tokens || !vehicle.tokens[0]) {
+			return callback(new Error("No tokens found"));
 		}
 
-		if (!vehicle[0].tokens || !vehicle[0].tokens[0]) {
-			callback(new Error("No tokens found"));
-			return;
+		if (vehicle.state == 'asleep') {
+			// Wake up the car first
+			await Tesla.wakeUpAsync(options);
 		}
 
-		let driveStateFailed = null;
-		let latitude = null;
-		let longitude = null;
-
-		Tesla.driveState({"authToken": g_BearerToken, "vehicleID": Config.tesla.vehicleId}, (err, driveState) => {
-			if (err) {
-				driveStateFailed = err;
-				return;
-			}
-
-			latitude = driveState.latitude;
-			longitude = driveState.longitude;
-		});
+		// Get the car's drive state because we need its coordinates
+		let driveState = await Tesla.driveStateAsync(options);
+		let latitude = driveState.latitude;
+		let longitude = driveState.longitude;
 
 		let success = false;
 
-		let otherVehicleId = vehicle[0].vehicle_id;
-		let token = vehicle[0].tokens[0];
+		let otherVehicleId = vehicle.vehicle_id;
+		let token = vehicle.tokens[0];
 		let ws = new WS13.WebSocket("wss://" + Config.tesla.email + ":" + token + "@streaming.vn.teslamotors.com/connect/" + otherVehicleId);
 		ws.on('connected', () => {
 			log("WS connected to Tesla API");
@@ -611,37 +601,12 @@ function triggerHomeLink(callback) {
 
 			if (data.msg_type == 'homelink:status') {
 				// that's our cue
-				let attempts = 0;
-				tryExecHomeLink();
-
-				function tryExecHomeLink() {
-					if (driveStateFailed) {
-						callback(driveStateFailed);
-						return;
-					}
-
-					if (!latitude || !longitude) {
-						if (++attempts > 30) {
-							callback(new Error("Cannot get drive state"));
-							try {
-								ws.disconnect(1000);
-							} catch (ex) {
-								// whatever
-							}
-							return;
-						}
-						setTimeout(tryExecHomeLink, 100);
-						return;
-					}
-
-					// we have our drive state
-					log("Sending HomeLink trigger command");
-					ws.send(JSON.stringify({
-						"msg_type": "homelink:cmd_trigger",
-						"latitude": latitude,
-						"longitude": longitude
-					}));
-				}
+				log("Sending HomeLink trigger command");
+				ws.send(JSON.stringify({
+					"msg_type": "homelink:cmd_trigger",
+					"latitude": latitude,
+					"longitude": longitude
+				}));
 			} else if (data.msg_type == 'homelink:cmd_result') {
 				success = true;
 
@@ -659,5 +624,7 @@ function triggerHomeLink(callback) {
 				}
 			}
 		});
-	});
+	} catch (err) {
+		callback(err);
+	}
 }

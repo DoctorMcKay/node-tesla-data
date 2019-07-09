@@ -13,18 +13,22 @@ The states are:
 - 4 = Parked and not charging: 30 minutes
 - 5 = Awoken via external input: 1 minute
 - 6 = Parked with HVAC on: 1 minute
-- 7 = Asleep: 6 hours
+- 7 = Asleep: 10 minutes
 
 Data is recorded to a MySQL table. The query you should use to create the table is in `create_table.sql`.
 
 ### Sleepy Cars
 
-If you have "always connected" disabled, then your Tesla will "go to sleep" after some time when not charging (and
-probably only when energy saving is active, not sure). In this case, when a data pull is scheduled, the application will
-wake the vehicle first.
+If you have "always connected" disabled (or you have MCU2), then your Tesla will "go to sleep" after some time when not
+charging (and probably only when energy saving is active, not sure).
 
-When a vehicle is awoken, the next data pull will not be for 6 hours, to minimize battery drain. It's recommended that
-you only disable "always connected" when you will be away from your vehicle for a long time, to minimize phantom drain.
+Before every scheduled data pull, the application will check to see if the car is asleep. If it is, then it won't awake
+the car to pull data (and nothing will be recorded in the database). However, every 3 hours the application will wake
+the car in order to pull data.
+
+So that is, if the vehicle is asleep, then the application will check every 10 minutes to see if it's awake yet. If it's
+still asleep but it's been at least 3 hours since the application last saw it awake, then the car will be awoken and
+data will be stored.
 
 # Installation
 

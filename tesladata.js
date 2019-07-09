@@ -80,7 +80,7 @@ const g_VehicleCommands = {
 
 const g_VehicleCommandsWithRefresh = ["lock", "unlock", "start_climate", "stop_climate", "wake_up", "vent_sunroof", "close_sunroof", "open_charge_port", "close_charge_port", "start_charge", "stop_charge"];
 
-var g_VehicleStateInterval = {}; // these are in minutes
+let g_VehicleStateInterval = {}; // these are in minutes
 g_VehicleStateInterval[VehicleState.Unknown] = 1;
 g_VehicleStateInterval[VehicleState.Charging] = 5;
 g_VehicleStateInterval[VehicleState.Supercharging] = 1;
@@ -90,16 +90,16 @@ g_VehicleStateInterval[VehicleState.Awoken] = 1;
 g_VehicleStateInterval[VehicleState.ClimateOn] = 1;
 g_VehicleStateInterval[VehicleState.Asleep] = 60 * 6; // 6 hours
 
-var g_BearerToken = null;
-var g_BearerTokenExpiresTime = Infinity;
-var g_DB = null;
-var g_CurrentState = VehicleState.Unknown;
-var g_LastState = VehicleState.Unknown;
-var g_LastStateChange = 0;
-var g_PollTimer;
-var g_LastPoll = 0;
-var g_DataListenerSockets = [];
-var g_CarLastAwoken = 0;
+let g_BearerToken = null;
+let g_BearerTokenExpiresTime = Infinity;
+let g_DB = null;
+let g_CurrentState = VehicleState.Unknown;
+let g_LastState = VehicleState.Unknown;
+let g_LastStateChange = 0;
+let g_PollTimer;
+let g_LastPoll = 0;
+let g_DataListenerSockets = [];
+let g_CarLastAwoken = 0;
 
 if (!process.env.ENCRYPTION_KEY) {
 	log("Encryption key needed");
@@ -142,7 +142,7 @@ connectDB();
 
 function auth() {
 	log("Decrypting refresh token");
-	var refreshToken = McCrypto.decrypt(process.env.ENCRYPTION_KEY, new Buffer(Config.tesla.encryptedToken, 'base64'));
+	let refreshToken = McCrypto.decrypt(process.env.ENCRYPTION_KEY, new Buffer(Config.tesla.encryptedToken, 'base64'));
 
 	log("Obtaining new bearer token...");
 	Tesla.refreshToken(refreshToken, (err, res) => {
@@ -150,7 +150,7 @@ function auth() {
 			throw err;
 		}
 
-		var body = JSON.parse(res.body);
+		let body = JSON.parse(res.body);
 
 		if (!body || !body.access_token || !body.refresh_token || !body.expires_in) {
 			throw new Error("Got malformed response");
@@ -182,7 +182,7 @@ function getData() {
 	}
 
 	log("Requesting data");
-	var options = {"authToken": g_BearerToken, "vehicleID": Config.tesla.vehicleId};
+	let options = {"authToken": g_BearerToken, "vehicleID": Config.tesla.vehicleId};
 
 	Tesla.vehicleData(options, function(err, result) {
 		if (err) {
@@ -210,18 +210,18 @@ function getData() {
 			g_LastStateChange = Date.now();
 		}
 
-		var charge = result.charge_state;
-		var climate = result.climate_state;
-		var drive = result.drive_state;
-		var vehicle = result.vehicle_state;
-		var config = result.vehicle_config;
+		let charge = result.charge_state;
+		let climate = result.climate_state;
+		let drive = result.drive_state;
+		let vehicle = result.vehicle_state;
+		let config = result.vehicle_config;
 
-		var climateFlags = flagify(climate, {"is_climate_on": CLIMATE_ON, "smart_preconditioning": CLIMATE_PRECONDITIONING});
+		let climateFlags = flagify(climate, {"is_climate_on": CLIMATE_ON, "smart_preconditioning": CLIMATE_PRECONDITIONING});
 		if (charge.battery_heater_on) {
 			climateFlags |= CLIMATE_BATTERY_HEATER;
 		}
 
-		var doorFlags = flagify(vehicle, {"df": DOOR_DRIVER, "pf": DOOR_PASSENGER, "dr": DOOR_REAR_LEFT, "pr": DOOR_REAR_RIGHT, "ft": DOOR_FRUNK, "rt": DOOR_LIFTGATE, "locked": DOOR_LOCKED});
+		let doorFlags = flagify(vehicle, {"df": DOOR_DRIVER, "pf": DOOR_PASSENGER, "dr": DOOR_REAR_LEFT, "pr": DOOR_REAR_RIGHT, "ft": DOOR_FRUNK, "rt": DOOR_LIFTGATE, "locked": DOOR_LOCKED});
 		if (vehicle.sun_roof_percent_open > 0) {
 			doorFlags |= DOOR_SUNROOF;
 		}
@@ -231,7 +231,7 @@ function getData() {
 			chargeState = charge.charge_port_door_open ? 'Complete' : 'Disconnected';
 		}
 
-		var cols = {
+		let cols = {
 			"timestamp": Math.floor(Date.now() / 1000),
 			"charging_state": chargeState,
 			"battery_level": charge.battery_level,
@@ -363,9 +363,9 @@ function getState(response) {
 }
 
 function flagify(obj, flags) {
-	var out = 0;
+	let out = 0;
 
-	for (var flag in flags) {
+	for (let flag in flags) {
 		if (flags.hasOwnProperty(flag) && obj.hasOwnProperty(flag) && obj[flag]) {
 			out |= flags[flag];
 		}
@@ -375,7 +375,7 @@ function flagify(obj, flags) {
 }
 
 // Set up the HTTP server
-var webServer = HTTP.createServer((req, res) => {
+let webServer = HTTP.createServer((req, res) => {
 	if (req.method == 'GET' && req.url == '/vehicle_state') {
 		req.on('data', () => {});
 		res.setHeader("Content-Type", "application/json; charset=UTF-8");
@@ -421,10 +421,10 @@ var webServer = HTTP.createServer((req, res) => {
 webServer.listen(Config.httpPort || 2019, "127.0.0.1");
 
 // Set up the WebSocket server
-var wsServer = new WS13.WebSocketServer({"pingInterval": 1000, "pingTimeout": 2000});
+let wsServer = new WS13.WebSocketServer({"pingInterval": 1000, "pingTimeout": 2000});
 wsServer.http(webServer);
 wsServer.on('handshake', (handshakeData, reject, accept) => {
-	var match = handshakeData.path.match(/^\/connect\/(\d+)\/?$/);
+	let match = handshakeData.path.match(/^\/connect\/(\d+)\/?$/);
 	if (!match && handshakeData.path != "/wsdata/") {
 		reject(404, "Not Found");
 		return;
@@ -442,7 +442,7 @@ wsServer.on('handshake', (handshakeData, reject, accept) => {
 
 	if (handshakeData.path == "/wsdata/") {
 		log("Incoming WS data socket connection from " + handshakeData.remoteAddress);
-		var client = accept({
+		let client = accept({
 			"options": {
 				"pingInterval": 30000
 			}
@@ -451,7 +451,7 @@ wsServer.on('handshake', (handshakeData, reject, accept) => {
 
 		client.on('disconnected', (code, reason, initiatedByUs) => {
 			log("Client from " + handshakeData.remoteAddress + " disconnected: \"" + reason + "\" (" + code + ")");
-			var idx = g_DataListenerSockets.indexOf(client);
+			let idx = g_DataListenerSockets.indexOf(client);
 			if (idx != -1) {
 				g_DataListenerSockets.splice(idx, 1);
 			}
@@ -459,7 +459,7 @@ wsServer.on('handshake', (handshakeData, reject, accept) => {
 
 		client.on('error', (err) => {
 			log("Client from " + handshakeData.remoteAddress + " experienced error: " + err.message);
-			var idx = g_DataListenerSockets.indexOf(client);
+			let idx = g_DataListenerSockets.indexOf(client);
 			if (idx != -1) {
 				g_DataListenerSockets.splice(idx, 1);
 			}
@@ -468,7 +468,7 @@ wsServer.on('handshake', (handshakeData, reject, accept) => {
 		return;
 	}
 
-	var vehicleId = match[1];
+	let vehicleId = match[1];
 	// Get the vehicle tokens
 	Tesla.allVehicles({"authToken": g_BearerToken}, (err, vehicles) => {
 		if (err) {
@@ -484,7 +484,7 @@ wsServer.on('handshake', (handshakeData, reject, accept) => {
 			return;
 		}
 
-		var vehicle = vehicles[0];
+		let vehicle = vehicles[0];
 		if (!vehicle.tokens || !vehicle.tokens[0]) {
 			log("No vehicle token for vehicle " + vehicleId);
 			reject(500, "Cannot get vehicle token");
@@ -493,7 +493,7 @@ wsServer.on('handshake', (handshakeData, reject, accept) => {
 
 		// Establish our connection
 		log("Connecting to: wss://" + Config.tesla.email + ":" + vehicle.tokens[0] + "@streaming.vn.teslamotors.com/connect/" + vehicleId);
-		var wsClient = new WS13.WebSocket("wss://" + Config.tesla.email + ":" + vehicle.tokens[0] + "@streaming.vn.teslamotors.com/connect/" + vehicleId);
+		let wsClient = new WS13.WebSocket("wss://" + Config.tesla.email + ":" + vehicle.tokens[0] + "@streaming.vn.teslamotors.com/connect/" + vehicleId);
 		wsClient.on('connected', onConnect);
 		wsClient.on('disconnected', onDisconnect);
 		wsClient.on('error', onError);
@@ -501,7 +501,7 @@ wsServer.on('handshake', (handshakeData, reject, accept) => {
 		function onConnect(details) {
 			log("Connected to Tesla WebSocket API");
 			cleanup();
-			var sock = accept();
+			let sock = accept();
 			new WebSocketProxy(sock, wsClient);
 
 			// We need the vehicle's GPS position
@@ -548,7 +548,7 @@ function triggerHomeLink(callback) {
 			return;
 		}
 
-		var vehicle = vehicles.filter(vehicle => vehicle.id_s == Config.tesla.vehicleId);
+		let vehicle = vehicles.filter(vehicle => vehicle.id_s == Config.tesla.vehicleId);
 		if (vehicle.length != 1) {
 			callback(new Error("Cannot find vehicle"));
 			return;
@@ -559,9 +559,9 @@ function triggerHomeLink(callback) {
 			return;
 		}
 
-		var driveStateFailed = null;
-		var latitude = null;
-		var longitude = null;
+		let driveStateFailed = null;
+		let latitude = null;
+		let longitude = null;
 
 		Tesla.driveState({"authToken": g_BearerToken, "vehicleID": Config.tesla.vehicleId}, (err, driveState) => {
 			if (err) {
@@ -573,11 +573,11 @@ function triggerHomeLink(callback) {
 			longitude = driveState.longitude;
 		});
 
-		var success = false;
+		let success = false;
 
-		var otherVehicleId = vehicle[0].vehicle_id;
-		var token = vehicle[0].tokens[0];
-		var ws = new WS13.WebSocket("wss://" + Config.tesla.email + ":" + token + "@streaming.vn.teslamotors.com/connect/" + otherVehicleId);
+		let otherVehicleId = vehicle[0].vehicle_id;
+		let token = vehicle[0].tokens[0];
+		let ws = new WS13.WebSocket("wss://" + Config.tesla.email + ":" + token + "@streaming.vn.teslamotors.com/connect/" + otherVehicleId);
 		ws.on('connected', () => {
 			log("WS connected to Tesla API");
 		});
@@ -611,7 +611,7 @@ function triggerHomeLink(callback) {
 
 			if (data.msg_type == 'homelink:status') {
 				// that's our cue
-				var attempts = 0;
+				let attempts = 0;
 				tryExecHomeLink();
 
 				function tryExecHomeLink() {

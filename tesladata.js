@@ -199,6 +199,7 @@ async function getData() {
 			if (g_CurrentState != VehicleState.Awoken && Date.now() - g_CarLastSeenAwake < (1000 * 60 * 60 * 3)) {
 				// Only wake it up to poll data every 3 hours
 				g_LastPoll = Date.now();
+				enqueueRequest();
 				return;
 			}
 

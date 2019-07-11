@@ -191,7 +191,7 @@ async function getData() {
 			return;
 		}
 
-		if (vehicleMetadata.state == 'asleep') {
+		if (['asleep', 'offline'].includes(vehicleMetadata.state)) {
 			// Car is asleep
 			log('Vehicle is asleep');
 			setState(VehicleState.Asleep);
@@ -553,7 +553,7 @@ async function triggerHomeLink(callback) {
 			return callback(new Error("No tokens found"));
 		}
 
-		if (vehicle.state == 'asleep') {
+		if (['offline', 'asleep'].includes(vehicle.state)) {
 			// Wake up the car first
 			await Tesla.wakeUpAsync(options);
 		}

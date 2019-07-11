@@ -204,6 +204,7 @@ async function getData() {
 
 			// We need to wake up the car
 			await Tesla.wakeUpAsync(options);
+			await new Promise(resolve => setTimeout(resolve, 5000));
 			// If we get this far, it worked
 		}
 
@@ -392,6 +393,7 @@ let webServer = HTTP.createServer(async (req, res) => {
 			// Try to wake up the car first if we last saw it awake more than 5 minutes ago
 			// If it's "trigger_homelink", the wake-up will be performed as part of the normal routine
 			await Tesla.wakeUpAsync({"vehicleID": Config.tesla.vehicleId});
+			await new Promise(resolve => setTimeout(resolve, 5000));
 		}
 
 		res.setHeader("Content-Type", "application/json; charset=UTF-8");
@@ -556,6 +558,7 @@ async function triggerHomeLink(callback) {
 		if (['offline', 'asleep'].includes(vehicle.state)) {
 			// Wake up the car first
 			await Tesla.wakeUpAsync(options);
+			await new Promise(resolve => setTimeout(resolve, 5000));
 		}
 
 		// Get the car's drive state because we need its coordinates

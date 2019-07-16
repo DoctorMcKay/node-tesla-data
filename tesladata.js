@@ -204,12 +204,30 @@ async function getData() {
 			}
 
 			// We need to wake up the car
+			log('Waking vehicle...');
 			await Tesla.wakeUpAsync(options);
-			await new Promise(resolve => setTimeout(resolve, 5000));
-			// If we get this far, it worked
+			// When this request completes, the vehicle isn't already awoken. It's waking up.
+			// The official Tesla app then does the vehicle data request repeatedly until it works
 		}
 
-		let result = await Tesla.vehicleDataAsync(options);
+		let result = null;
+		for (let i = 1; i <= 20; i++) {
+			// Retry at most 20 times
+			try {
+				result = await Tesla.vehicleDataAsync(options);
+				break; // it worked
+			} catch (ex) {
+				log(`Error retrieving vehicle data on request ${i}: ${ex.message}`);
+
+				if (i == 20) {
+					throw ex; // this attempt failed
+				}
+
+				// Wait a second and try again
+				await new Promise((resolve) => setTimeout(resolve, 1000));
+			}
+		}
+
 		g_LastPoll = g_CarLastSeenAwake = Date.now();
 
 		g_DataListenerSockets.forEach((socket) => {

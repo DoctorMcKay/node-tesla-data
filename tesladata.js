@@ -73,6 +73,12 @@ const g_VehicleCommands = {
 	"close_sunroof": function(callback) {
 		Tesla.sunRoofControl({"authToken": g_BearerToken, "vehicleID": Config.tesla.vehicleId}, Tesla.SUNROOF_CLOSED, callback);
 	},
+	"enable_sentry": function(callback) {
+		Tesla.setSentryMode({"authToken": g_BearerToken, "vehicleID": Config.tesla.vehicleId}, true, callback);
+	},
+	"disable_sentry": function(callback) {
+		Tesla.setSentryMode({"authToken": g_BearerToken, "vehicleID": Config.tesla.vehicleId}, false, callback);
+	},
 	"trigger_homelink": function(callback) {
 		triggerHomeLink(callback);
 	}

@@ -84,7 +84,21 @@ const g_VehicleCommands = {
 	}
 };
 
-const g_VehicleCommandsWithRefresh = ["lock", "unlock", "start_climate", "stop_climate", "wake_up", "vent_sunroof", "close_sunroof", "open_charge_port", "close_charge_port", "start_charge", "stop_charge"];
+const g_VehicleCommandsWithRefresh = [
+	'lock',
+	'unlock',
+	'start_climate',
+	'stop_climate',
+	'wake_up',
+	'vent_sunroof',
+	'close_sunroof',
+	'open_charge_port',
+	'close_charge_port',
+	'start_charge',
+	'stop_charge',
+	'enable_sentry',
+	'disable_sentry'
+];
 
 let g_VehicleStateInterval = {}; // these are in minutes
 g_VehicleStateInterval[VehicleState.Unknown] = 1;

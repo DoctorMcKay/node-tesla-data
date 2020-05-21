@@ -8,7 +8,7 @@
 		"@doctormckay/crypto": "^1.2.0",
 		"mysql": "^2.17.1",
 		"teslajs": "^4.3.11",
-		"websocket13": "^1.7.5"
+		"websocket13": "^2.1.3"
 	},
 	"engines": {
 		"node": ">=6.0.0"

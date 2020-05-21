@@ -80,7 +80,17 @@ const g_VehicleCommands = {
 		Tesla.setSentryMode({"authToken": g_BearerToken, "vehicleID": Config.tesla.vehicleId}, false, callback);
 	},
 	"trigger_homelink": function(callback) {
-		triggerHomeLink(callback);
+		let options = {"authToken": g_BearerToken, "vehicleID": Config.tesla.vehicleId};
+		// We need the vehicle's GPS position
+		Tesla.driveState(options, (err, driveState) => {
+			if (err) {
+				log("Cannot get drive state: " + err.message);
+				callback(err);
+				return;
+			}
+
+			Tesla.post_command(options, "command/trigger_homelink", {lat: driveState.latitude, lon: driveState.longitude} , callback);
+		});
 	}
 };
 
@@ -428,9 +438,8 @@ let webServer = HTTP.createServer(async (req, res) => {
 		let command = req.url.substring(9);
 		log("Received command " + command);
 
-		if (command != 'trigger_homelink' && Date.now() - g_CarLastSeenAwake > (1000 * 60 * 5)) {
+		if (Date.now() - g_CarLastSeenAwake > (1000 * 60 * 5)) {
 			// Try to wake up the car first if we last saw it awake more than 5 minutes ago
-			// If it's "trigger_homelink", the wake-up will be performed as part of the normal routine
 			await Tesla.wakeUpAsync({"vehicleID": Config.tesla.vehicleId});
 			await new Promise(resolve => setTimeout(resolve, 5000));
 		}
@@ -578,95 +587,3 @@ wsServer.on('handshake', (handshakeData, reject, accept) => {
 		}
 	});
 });
-
-async function triggerHomeLink(callback) {
-	// This is a bit more involved than it really needs to be
-	try {
-		let options = {"authToken": g_BearerToken, "vehicleID": Config.tesla.vehicleId};
-
-		// Retrieve vehicle metadata first to determine if we need to wake it up, and for tokens
-		let vehicle = (await Tesla.vehiclesAsync(options)).find(v => v.id_s == Config.tesla.vehicleId);
-		if (!vehicle) {
-			return callback(new Error("Cannot find vehicle"));
-		}
-
-		if (!vehicle.tokens || !vehicle.tokens[0]) {
-			return callback(new Error("No tokens found"));
-		}
-
-		if (['offline', 'asleep'].includes(vehicle.state)) {
-			// Wake up the car first
-			await Tesla.wakeUpAsync(options);
-			await new Promise(resolve => setTimeout(resolve, 5000));
-		}
-
-		// Get the car's drive state because we need its coordinates
-		let driveState = await Tesla.driveStateAsync(options);
-		let latitude = driveState.latitude;
-		let longitude = driveState.longitude;
-
-		let success = false;
-
-		let otherVehicleId = vehicle.vehicle_id;
-		let token = vehicle.tokens[0];
-		let ws = new WS13.WebSocket("wss://" + Config.tesla.email + ":" + token + "@streaming.vn.teslamotors.com/connect/" + otherVehicleId);
-		ws.on('connected', () => {
-			log("WS connected to Tesla API");
-		});
-
-		ws.on('disconnected', (code, reason, initiatedByUs) => {
-			if (initiatedByUs) {
-				log("Successfully disconnected from Tesla WS API");
-			} else {
-				log("Disconnected from Tesla WS API: " + code + " (" + reason + ")");
-				if (!success) {
-					callback(new Error("Disconnected from Tesla"));
-				}
-			}
-		});
-
-		ws.on('error', (err) => {
-			log("Got error with Tesla WS API: " + err.message);
-			if (!success) {
-				callback(err);
-			}
-		});
-
-		ws.on('message', (type, data) => {
-			data = data.toString('utf8');
-			try {
-				data = JSON.parse(data);
-			} catch (ex) {
-				callback(ex);
-				return;
-			}
-
-			if (data.msg_type == 'homelink:status') {
-				// that's our cue
-				log("Sending HomeLink trigger command");
-				ws.send(JSON.stringify({
-					"msg_type": "homelink:cmd_trigger",
-					"latitude": latitude,
-					"longitude": longitude
-				}));
-			} else if (data.msg_type == 'homelink:cmd_result') {
-				success = true;
-
-				if (data.result) {
-					// success
-					callback(null);
-				} else {
-					callback(new Error(data.reason || "Could not trigger HomeLink"));
-				}
-
-				try {
-					ws.disconnect(1000);
-				} catch (ex) {
-					// don't care
-				}
-			}
-		});
-	} catch (err) {
-		callback(err);
-	}
-}

@@ -14,7 +14,7 @@ function TeslaStreamingClient(url, vehicleId, password) {
 		url += "/";
 	}
 
-	this._ws = new WebSocket(url + vehicleId + "?password=" + password);
+	this._ws = new WebSocket(url + vehicleId + "?password=" + encodeURIComponent(password));
 	this._ws.addEventListener('open', this._onOpen.bind(this));
 	this._ws.addEventListener('close', this._onClose.bind(this));
 	this._ws.addEventListener('message', this._onMessage.bind(this));

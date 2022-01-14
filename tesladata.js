@@ -182,15 +182,11 @@ function auth() {
 
 		let body = JSON.parse(res.body);
 
-		if (!body || !body.access_token || !body.refresh_token || !body.expires_in) {
+		if (!body || !body.access_token || !body.expires_in) {
 			throw new Error("Got malformed response");
 		}
 
-		log("Got new refresh token " + body.refresh_token.substring(0, 6) + "...");
 		g_BearerToken = body.access_token;
-		Config.tesla.encryptedToken = McCrypto.encrypt(McCrypto.Cipher.AES256CTRWithHMAC, process.env.ENCRYPTION_KEY, body.refresh_token).toString('base64');
-		FS.writeFileSync(__dirname + '/config.json', JSON.stringify(Config, undefined, "\t"));
-
 		g_BearerTokenExpiresTime = Date.now() + (1000 * (body.expires_in - (60 * 60)));
 		getData();
 	});

@@ -34,10 +34,11 @@ data will be stored.
 
 1. **You will need Node.js v6 or later.** Clone the repository and run `npm install` in it to download dependencies.
 2. Copy `config.sample.json` to `config.json` and enter your MySQL credentials. Leave the `tesla` section alone for now.
-3. Generate an encryption key. This should be a rather long random string of characters. You will need to supply this key to all invocations through the `ENCRYPTION_KEY` environment variable. On Linux, you can do this using `ENCRYPTION_KEY=keyhere node script.js` 
-4. Run `ENCRYPTION_KEY=keyhere node auth.js` and enter your MyTesla username and password when prompted. This will save your encrypted refresh token to `config.json`, and will display a list of all your vehicles.
-5. Pick the ID (not the VIN) of the vehicle you want to track, and put it in `config.json`.
-6. Now all you need to do is run `tesladata.js`, being sure to supply your `ENCRYPTION_KEY`. If you want to run it as a daemon, [forever](https://www.npmjs.com/package/forever) is a good way to do that.
+3. Generate an encryption key. This should be a rather long random string of characters. You will need to supply this key to all invocations through the `ENCRYPTION_KEY` environment variable. On Linux, you can do this using `ENCRYPTION_KEY=keyhere node script.js`
+4. Use [Tesla Access Token Generator](https://github.com/DoctorMcKay/chromium-tesla-token-generator) to get a refresh token
+5. Run `ENCRYPTION_KEY=keyhere node set_token.js` and paste your **Refresh Token** when prompted. This will save your encrypted refresh token to `config.json`, and will display a list of all your vehicles.
+7. Pick the ID (not the VIN) of the vehicle you want to track, and put it in `config.json`.
+8. Now all you need to do is run `tesladata.js`, being sure to supply your `ENCRYPTION_KEY`. If you want to run it as a daemon, [forever](https://www.npmjs.com/package/forever) is a good way to do that.
     - Install forever with: `npm install -g forever` (run with `sudo` or an elevated command prompt)
     - To run on Linux with an encryption key: `ENCRYPTION_KEY=keyhere forever start tesladata.js`
     - Once invoked with the key, you can restart it without supplying the key: `forever restart tesladata.js`

@@ -1,7 +1,7 @@
 const FS = require('fs');
 const HTTP = require('http');
 const McCrypto = require('@doctormckay/crypto');
-const MySQL = require('mysql');
+const MySQL = require('mysql2');
 const Tesla = require('teslajs');
 const WS13 = require('websocket13');
 

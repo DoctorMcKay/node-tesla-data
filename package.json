@@ -6,7 +6,7 @@
 	"license": "GPLv3",
 	"dependencies": {
 		"@doctormckay/crypto": "^1.2.0",
-		"mysql": "^2.17.1",
+		"mysql2": "^3.0.1",
 		"teslajs": "DoctorMcKay/TeslaJS#auth-update",
 		"websocket13": "^2.1.3"
 	},

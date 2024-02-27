@@ -1,5 +1,6 @@
 const FS = require('fs');
 const HTTP = require('http');
+const {HttpClient} = require('@doctormckay/stdlib/http');
 const McCrypto = require('@doctormckay/crypto');
 const MySQL = require('mysql2');
 const Tesla = require('teslajs');
@@ -21,6 +22,8 @@ const DOOR_LOCKED = 1 << 7;
 const CLIMATE_ON = 1 << 0;
 const CLIMATE_PRECONDITIONING = 1 << 1;
 const CLIMATE_BATTERY_HEATER = 1 << 2;
+
+let g_HttpClient = new HttpClient();
 
 const VehicleState = {
 	"Unknown": 0,
@@ -208,10 +211,10 @@ async function getData() {
 	}
 
 	log("Requesting data");
-	let options = {"authToken": g_BearerToken, "vehicleID": Config.tesla.vehicleId};
+	let options = {authToken: g_BearerToken, vehicleID: Config.tesla.vehicleVin};
 
 	try {
-		let vehicleMetadata = (await Tesla.vehiclesAsync(options)).find(v => (v.id_s || v.id) == Config.tesla.vehicleId);
+		let vehicleMetadata = (await getProducts()).find(v => v.vin == Config.tesla.vehicleVin);
 		if (!vehicleMetadata) {
 			log("Unable to retrieve metadata for vehicle: vehicle not found");
 			return;
@@ -229,7 +232,7 @@ async function getData() {
 				return;
 			}
 
-			// We need to wake up the car
+			// We need to wake up the car. The wakeup endpoint uses the VIN to identify the vehicle.
 			log('Waking vehicle...');
 			await Tesla.wakeUpAsync(options);
 			// When this request completes, the vehicle isn't already awoken. It's waking up.
@@ -240,7 +243,8 @@ async function getData() {
 		for (let i = 1; i <= 20; i++) {
 			// Retry at most 20 times
 			try {
-				result = await Tesla.vehicleDataAsync(options);
+				// The vehicle data endpoint uses the API ID of the car.
+				result = await getVehicleData(vehicleMetadata.id_s || vehicleMetadata.id);
 				break; // it worked
 			} catch (ex) {
 				log(`Error retrieving vehicle data on request ${i}: ${ex.message}`);
@@ -583,3 +587,39 @@ wsServer.on('handshake', (handshakeData, reject, accept) => {
 		}
 	});
 });
+
+async function getProducts() {
+	let response = await g_HttpClient.request({
+		method: 'GET',
+		url: 'https://owner-api.teslamotors.com/api/1/products?orders=true',
+		headers: {
+			Authorization: `Bearer ${g_BearerToken}`
+		}
+	});
+
+	return response.jsonBody.response;
+}
+
+async function getVehicleData(vehicleId) {
+	let endpoints = [
+		'charge_state',
+		'climate_state',
+		'closures_state',
+		'drive_state',
+		'gui_settings',
+		'location_state',
+		'vehicle_config',
+		'vehicle_state',
+		'vehicle_data_combo'
+	];
+
+	let response = await g_HttpClient.request({
+		method: 'GET',
+		url: `https://owner-api.teslamotors.com/api/1/vehicles/${vehicleId}/vehicle_data?endpoints=${endpoints.join(';')}`,
+		headers: {
+			Authorization: `Bearer ${g_BearerToken}`
+		}
+	});
+
+	return response.jsonBody.response;
+}

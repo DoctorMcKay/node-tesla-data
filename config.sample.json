@@ -9,6 +9,6 @@
 	"tesla": {
 		"email": "<MyTesla email address>",
 		"encryptedToken": "<encrypted refresh token>",
-		"vehicleId": "<vehicle ID from API>"
+		"vehicleVin": "<your car's full VIN>"
 	}
 }

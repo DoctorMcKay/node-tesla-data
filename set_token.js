@@ -20,8 +20,6 @@ ReadLine.createInterface({"input": process.stdin, "output": process.stdout}).que
 	Config.tesla.encryptedToken = McCrypto.encrypt(McCrypto.Cipher.AES256CTRWithHMAC, process.env.ENCRYPTION_KEY, token).toString('base64');
 	FS.writeFileSync(__dirname + '/config.json', JSON.stringify(Config, undefined, "\t"));
 
-	let vehicles = await TeslaJS.vehiclesAsync({authToken: refreshResult.authToken});
 	console.log('Token encrypted and saved successfully');
-
 	process.exit(0);
 });

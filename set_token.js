@@ -22,10 +22,6 @@ ReadLine.createInterface({"input": process.stdin, "output": process.stdout}).que
 
 	let vehicles = await TeslaJS.vehiclesAsync({authToken: refreshResult.authToken});
 	console.log('Token encrypted and saved successfully');
-	console.log('===== YOUR VEHICLES =====');
-	vehicles.forEach((car) => {
-		console.log(`Vehicle ID ${car.id_s} - VIN ${car.vin} (${car.display_name || "unnamed"})`);
-	});
 
 	process.exit(0);
 });

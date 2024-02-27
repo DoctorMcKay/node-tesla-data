@@ -376,7 +376,7 @@ function getState(response) {
 		return VehicleState.Charging;
 	}
 
-	if (response.drive_state && response.drive_state.speed !== null) {
+	if (response.drive_state && response.drive_state.speed !== null && response.drive_state.shift_state && response.drive_state.shift_state != 'P') {
 		return VehicleState.Driving;
 	}
 

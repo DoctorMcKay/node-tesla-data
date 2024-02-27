@@ -615,7 +615,7 @@ async function getVehicleData(vehicleId) {
 
 	let response = await g_HttpClient.request({
 		method: 'GET',
-		url: `https://owner-api.teslamotors.com/api/1/vehicles/${vehicleId}/vehicle_data?endpoints=${endpoints.join(';')}`,
+		url: `https://owner-api.teslamotors.com/api/1/vehicles/${vehicleId}/vehicle_data?endpoints=${encodeURIComponent(endpoints.join(';'))}`,
 		headers: {
 			Authorization: `Bearer ${g_BearerToken}`
 		}
